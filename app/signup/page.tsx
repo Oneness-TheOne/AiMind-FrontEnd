@@ -78,7 +78,7 @@ export default function SignupPage() {
                   <path d="M8 13c1.5 2 3 3 4 3s2.5-1 4-3" />
                 </svg>
               </div>
-              <span className="text-2xl font-semibold text-foreground">마음그림</span>
+              <span className="text-2xl font-semibold text-foreground">아이마음</span>
             </Link>
             <p className="text-muted-foreground">아이의 마음을 이해하는 첫 걸음</p>
           </div>
@@ -88,7 +88,7 @@ export default function SignupPage() {
             <CardHeader className="space-y-1 pb-4">
               <CardTitle className="text-xl">회원가입</CardTitle>
               <CardDescription>
-                계정을 만들어 마음그림 서비스를 시작하세요
+                계정을 만들어 아이마음 서비스를 시작하세요
               </CardDescription>
             </CardHeader>
             <CardContent>

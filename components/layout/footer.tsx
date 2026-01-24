@@ -21,7 +21,7 @@ export function Footer() {
                   <path d="M8 13c1.5 2 3 3 4 3s2.5-1 4-3" />
                 </svg>
               </div>
-              <span className="text-lg font-bold text-foreground">마음그림</span>
+              <span className="text-lg font-bold text-foreground">아이마음</span>
             </Link>
             <p className="text-sm text-muted-foreground leading-relaxed">
               AI 기반 아동 그림 심리 분석으로<br />
@@ -77,7 +77,7 @@ export function Footer() {
 
         <div className="mt-12 border-t border-slate-200 pt-6 flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-xs text-muted-foreground">
-            2026 마음그림. All rights reserved.
+            2026 아이마음. All rights reserved.
           </p>
           <div className="flex gap-6">
             <Link href="/privacy" className="text-xs text-muted-foreground hover:text-primary transition-colors">
