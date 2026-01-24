@@ -1,11 +1,11 @@
-import { Header } from "@/components/header"
-import { Footer } from "@/components/footer"
-import { HeroSection } from "@/components/hero-section"
-import { FeaturesSection } from "@/components/features-section"
-import { StatsSection } from "@/components/stats-section"
-import { HowItWorksSection } from "@/components/how-it-works-section"
-import { DailyTipSection } from "@/components/daily-tip-section"
-import { CTASection } from "@/components/cta-section"
+import { Header } from "@/components/layout/header"
+import { Footer } from "@/components/layout/footer"
+import { HeroSection } from "@/components/home/hero-section"
+import { FeaturesSection } from "@/components/home/features-section"
+import { StatsSection } from "@/components/home/stats-section"
+import { HowItWorksSection } from "@/components/home/how-it-works-section"
+import { DailyTipSection } from "@/components/home/daily-tip-section"
+import { CTASection } from "@/components/home/cta-section"
 
 export default function HomePage() {
   return (

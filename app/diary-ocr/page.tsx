@@ -1,7 +1,7 @@
-import { Header } from "@/components/header"
-import { Footer } from "@/components/footer"
-import { VideoHero } from "@/components/video-hero"
-import { DiaryOCR } from "@/components/diary-ocr"
+import { Header } from "@/components/layout/header"
+import { Footer } from "@/components/layout/footer"
+import { VideoHero } from "@/components/shared/video-hero"
+import { DiaryOCR } from "@/components/mypage/diary-ocr"
 import { Card, CardContent } from "@/components/ui/card"
 import { BookOpen, Sparkles, Clock, Shield } from "lucide-react"
 

@@ -1,36 +1,34 @@
 "use client"
 
-import { useState } from "react"
-import { Header } from "@/components/header"
-import { Footer } from "@/components/footer"
+import { useState, useEffect } from "react"
+import { Header } from "@/components/layout/header"
+import { Footer } from "@/components/layout/footer"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Progress } from "@/components/ui/progress"
 import { 
   User,
   Settings,
   FileText,
   Heart,
   Bookmark,
-  Bell,
   ChevronRight,
   Calendar,
   TrendingUp,
   Award,
-  Clock,
   ImageIcon,
   MessageCircle,
   Download,
   Share2,
   BarChart3,
   Palette,
-  BookOpen
+  BookOpen,
+  Plus,
+  ExternalLink
 } from "lucide-react"
 import Link from "next/link"
-import { DiaryOCR } from "@/components/diary-ocr"
+import { DiaryOCR } from "@/components/mypage/diary-ocr"
 
 interface AnalysisHistory {
   id: string
@@ -135,224 +133,255 @@ const mockBookmarks = [
   }
 ]
 
-const developmentData = {
-  emotional: { current: 78, previous: 72, label: "정서 발달" },
-  social: { current: 82, previous: 78, label: "사회성 발달" },
-  cognitive: { current: 75, previous: 70, label: "인지 발달" },
-  creative: { current: 85, previous: 80, label: "창의성" }
-}
+const developmentData = [
+  { key: "emotional", current: 78, previous: 72, label: "정서 발달", color: "bg-teal-500" },
+  { key: "social", current: 82, previous: 78, label: "사회성 발달", color: "bg-blue-500" },
+  { key: "cognitive", current: 75, previous: 70, label: "인지 발달", color: "bg-purple-500" },
+  { key: "creative", current: 85, previous: 80, label: "창의성", color: "bg-amber-500" }
+]
 
 export default function MyPage() {
   const [activeTab, setActiveTab] = useState("overview")
+  const [isVisible, setIsVisible] = useState(false)
+
+  useEffect(() => {
+    setIsVisible(true)
+  }, [])
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-white flex flex-col">
       <Header />
       
       <main className="flex-1">
-        <div className="container mx-auto px-4 py-6">
-          {/* Profile Header */}
-          <div className="bg-gradient-to-r from-primary/10 to-primary/5 rounded-2xl p-6 md:p-8 mb-6">
-            <div className="flex flex-col md:flex-row items-center gap-6">
-              <Avatar className="h-24 w-24 border-4 border-background">
-                <AvatarFallback className="text-2xl bg-primary text-primary-foreground">
+        {/* Profile Section - Full Width Banner */}
+        <div className="bg-gradient-to-r from-teal-500 to-teal-600">
+          <div className="container mx-auto px-4 lg:px-8 py-8">
+            <div 
+              className={`flex flex-col md:flex-row items-center gap-6 transition-all duration-700 ${
+                isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+              }`}
+            >
+              <Avatar className="h-24 w-24 border-4 border-white/30">
+                <AvatarFallback className="text-2xl bg-white text-teal-600 font-bold">
                   김
                 </AvatarFallback>
               </Avatar>
               
-              <div className="flex-1 text-center md:text-left">
-                <div className="flex items-center justify-center md:justify-start gap-2">
-                  <h1 className="text-2xl font-bold text-foreground">김미래</h1>
-                  <Badge>프리미엄</Badge>
+              <div className="flex-1 text-center md:text-left text-white">
+                <div className="flex items-center justify-center md:justify-start gap-3">
+                  <h1 className="text-2xl font-bold">김미래</h1>
+                  <Badge className="bg-white/20 text-white hover:bg-white/30 border-0">프리미엄</Badge>
                 </div>
-                <p className="text-muted-foreground mt-1">miracle.mom@email.com</p>
-                <div className="flex items-center justify-center md:justify-start gap-4 mt-3 text-sm">
-                  <span className="flex items-center gap-1">
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
-                    가입일: 2023.06.15
+                <p className="text-teal-100 mt-1">miracle.mom@email.com</p>
+                <div className="flex items-center justify-center md:justify-start gap-4 mt-3 text-sm text-teal-100">
+                  <span className="flex items-center gap-1.5">
+                    <Calendar className="h-4 w-4" />
+                    2023.06.15 가입
                   </span>
-                  <span className="flex items-center gap-1">
-                    <FileText className="h-4 w-4 text-muted-foreground" />
+                  <span className="flex items-center gap-1.5">
+                    <FileText className="h-4 w-4" />
                     분석 {mockAnalysisHistory.length}회
                   </span>
                 </div>
               </div>
               
-              <div className="flex gap-2">
-                <Link href="/mypage/settings">
-                  <Button variant="outline" className="gap-2 bg-transparent">
-                    <Settings className="h-4 w-4" />
-                    설정
-                  </Button>
-                </Link>
-              </div>
+              <Link href="/mypage/settings">
+                <Button variant="outline" size="sm" className="gap-2 bg-white/10 border-white/30 text-white hover:bg-white/20 hover:text-white">
+                  <Settings className="h-4 w-4" />
+                  설정
+                </Button>
+              </Link>
             </div>
           </div>
+        </div>
 
-          {/* Main Content */}
+        {/* Stats Cards */}
+        <div className="container mx-auto px-4 lg:px-8 -mt-6">
+          <div 
+            className={`grid grid-cols-3 gap-4 transition-all duration-700 delay-100 ${
+              isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+            }`}
+          >
+            <div className="bg-white rounded-2xl shadow-lg shadow-slate-200/50 p-6 text-center hover:shadow-xl transition-shadow duration-300">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-teal-50 mb-3">
+                <FileText className="h-5 w-5 text-teal-600" />
+              </div>
+              <p className="text-3xl font-bold text-slate-800">{mockAnalysisHistory.length}</p>
+              <p className="text-sm text-slate-500 mt-1">총 분석</p>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-lg shadow-slate-200/50 p-6 text-center hover:shadow-xl transition-shadow duration-300">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-50 mb-3">
+                <TrendingUp className="h-5 w-5 text-green-600" />
+              </div>
+              <p className="text-3xl font-bold text-slate-800">80<span className="text-lg">점</span></p>
+              <p className="text-sm text-slate-500 mt-1">평균 점수</p>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-lg shadow-slate-200/50 p-6 text-center hover:shadow-xl transition-shadow duration-300">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-amber-50 mb-3">
+                <Award className="h-5 w-5 text-amber-600" />
+              </div>
+              <p className="text-3xl font-bold text-slate-800">2<span className="text-lg">명</span></p>
+              <p className="text-sm text-slate-500 mt-1">등록 아이</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="container mx-auto px-4 lg:px-8 py-8">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="w-full justify-start overflow-x-auto bg-muted/50 mb-6">
-              <TabsTrigger value="overview" className="gap-2">
+            <TabsList 
+              className={`w-full justify-start overflow-x-auto bg-slate-100 rounded-full p-1 mb-8 transition-all duration-700 delay-200 ${
+                isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+              }`}
+            >
+              <TabsTrigger value="overview" className="gap-2 rounded-full px-5 py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm">
                 <BarChart3 className="h-4 w-4" />
                 개요
               </TabsTrigger>
-              <TabsTrigger value="history" className="gap-2">
+              <TabsTrigger value="history" className="gap-2 rounded-full px-5 py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm">
                 <FileText className="h-4 w-4" />
                 분석 기록
               </TabsTrigger>
-              <TabsTrigger value="diary" className="gap-2">
+              <TabsTrigger value="diary" className="gap-2 rounded-full px-5 py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm">
                 <BookOpen className="h-4 w-4" />
                 그림일기 OCR
               </TabsTrigger>
-              <TabsTrigger value="children" className="gap-2">
+              <TabsTrigger value="children" className="gap-2 rounded-full px-5 py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm">
                 <User className="h-4 w-4" />
                 아이 관리
               </TabsTrigger>
-              <TabsTrigger value="activity" className="gap-2">
+              <TabsTrigger value="activity" className="gap-2 rounded-full px-5 py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm">
                 <MessageCircle className="h-4 w-4" />
-                활동 내역
+                활동
               </TabsTrigger>
-              <TabsTrigger value="bookmarks" className="gap-2">
+              <TabsTrigger value="bookmarks" className="gap-2 rounded-full px-5 py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm">
                 <Bookmark className="h-4 w-4" />
                 저장됨
               </TabsTrigger>
             </TabsList>
 
             {/* Overview Tab */}
-            <TabsContent value="overview" className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Quick Stats */}
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 bg-primary/10 rounded-xl">
-                        <FileText className="h-6 w-6 text-primary" />
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">총 분석 횟수</p>
-                        <p className="text-2xl font-bold text-foreground">{mockAnalysisHistory.length}</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 bg-green-100 rounded-xl">
-                        <TrendingUp className="h-6 w-6 text-green-600" />
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">평균 발달 점수</p>
-                        <p className="text-2xl font-bold text-foreground">80점</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 bg-amber-100 rounded-xl">
-                        <Award className="h-6 w-6 text-amber-600" />
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">등록된 아이</p>
-                        <p className="text-2xl font-bold text-foreground">2명</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
+            <TabsContent value="overview" className="space-y-8">
               {/* Development Progress */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <BarChart3 className="h-5 w-5 text-primary" />
-                    발달 영역별 추이
-                  </CardTitle>
-                  <CardDescription>최근 분석 결과 기반</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  {Object.entries(developmentData).map(([key, data]) => (
-                    <div key={key}>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium">{data.label}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold">{data.current}점</span>
-                          <Badge variant={data.current > data.previous ? "default" : "secondary"} className="text-xs">
-                            {data.current > data.previous ? "+" : ""}{data.current - data.previous}
-                          </Badge>
-                        </div>
+              <section
+                className={`transition-all duration-700 delay-300 ${
+                  isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-lg font-bold text-slate-800">발달 영역별 분석</h2>
+                  <span className="text-sm text-slate-400">최근 분석 결과 기반</span>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {developmentData.map((data, index) => (
+                    <div 
+                      key={data.key}
+                      className={`bg-slate-50 rounded-2xl p-5 transition-all duration-500 hover:bg-slate-100 ${
+                        isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+                      }`}
+                      style={{ transitionDelay: `${400 + index * 100}ms` }}
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-sm font-medium text-slate-600">{data.label}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          data.current > data.previous ? "bg-green-100 text-green-600" : "bg-slate-200 text-slate-500"
+                        }`}>
+                          {data.current > data.previous ? "+" : ""}{data.current - data.previous}
+                        </span>
                       </div>
-                      <Progress value={data.current} className="h-2" />
+                      <p className="text-3xl font-bold text-slate-800">{data.current}</p>
+                      <div className="mt-3 h-2 bg-slate-200 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full ${data.color} rounded-full transition-all duration-1000`}
+                          style={{ width: `${data.current}%` }}
+                        />
+                      </div>
                     </div>
                   ))}
-                </CardContent>
-              </Card>
+                </div>
+              </section>
 
               {/* Recent Analysis */}
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle>최근 분석 기록</CardTitle>
-                  <Button variant="ghost" className="text-sm" onClick={() => setActiveTab("history")}>
+              <section
+                className={`transition-all duration-700 delay-500 ${
+                  isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-lg font-bold text-slate-800">최근 분석 기록</h2>
+                  <Button variant="ghost" size="sm" className="text-teal-600 hover:text-teal-700" onClick={() => setActiveTab("history")}>
                     전체보기
                     <ChevronRight className="h-4 w-4 ml-1" />
                   </Button>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {mockAnalysisHistory.slice(0, 3).map(analysis => (
-                      <AnalysisHistoryItem key={analysis.id} analysis={analysis} />
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+                </div>
+                <div className="space-y-3">
+                  {mockAnalysisHistory.slice(0, 3).map((analysis, index) => (
+                    <AnalysisCard 
+                      key={analysis.id} 
+                      analysis={analysis}
+                      delay={600 + index * 100}
+                      isVisible={isVisible}
+                    />
+                  ))}
+                </div>
+              </section>
             </TabsContent>
 
             {/* Analysis History Tab */}
-            <TabsContent value="history" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>분석 기록</CardTitle>
-                  <CardDescription>지금까지 진행한 모든 그림 분석 기록입니다</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {mockAnalysisHistory.map(analysis => (
-                      <AnalysisHistoryItem key={analysis.id} analysis={analysis} showActions />
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+            <TabsContent value="history">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-800">분석 기록</h2>
+                  <p className="text-sm text-slate-500 mt-1">지금까지 진행한 모든 그림 분석 기록</p>
+                </div>
+                <Link href="/analysis">
+                  <Button className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    새 분석
+                  </Button>
+                </Link>
+              </div>
+              <div className="space-y-3">
+                {mockAnalysisHistory.map((analysis, index) => (
+                  <AnalysisCard 
+                    key={analysis.id} 
+                    analysis={analysis} 
+                    showActions
+                    delay={index * 100}
+                    isVisible={true}
+                  />
+                ))}
+              </div>
             </TabsContent>
 
             {/* Diary OCR Tab */}
-            <TabsContent value="diary" className="space-y-6">
+            <TabsContent value="diary">
               <DiaryOCR />
             </TabsContent>
 
             {/* Children Management Tab */}
-            <TabsContent value="children" className="space-y-6">
-              <div className="flex items-center justify-between">
+            <TabsContent value="children">
+              <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h2 className="text-xl font-bold">아이 관리</h2>
-                  <p className="text-muted-foreground text-sm">등록된 아이 정보를 관리합니다</p>
+                  <h2 className="text-lg font-bold text-slate-800">아이 관리</h2>
+                  <p className="text-sm text-slate-500 mt-1">등록된 아이 정보</p>
                 </div>
                 <Button className="gap-2">
-                  <User className="h-4 w-4" />
+                  <Plus className="h-4 w-4" />
                   아이 추가
                 </Button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid md:grid-cols-2 gap-4">
                 <ChildCard 
                   name="김지우" 
                   age="5세" 
                   gender="여아" 
                   birthDate="2019.03.15"
                   analysisCount={3}
+                  color="bg-pink-500"
                 />
                 <ChildCard 
                   name="김민서" 
@@ -360,78 +389,76 @@ export default function MyPage() {
                   gender="남아" 
                   birthDate="2017.08.22"
                   analysisCount={1}
+                  color="bg-blue-500"
                 />
               </div>
             </TabsContent>
 
             {/* Activity Tab */}
-            <TabsContent value="activity" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>활동 내역</CardTitle>
-                  <CardDescription>커뮤니티 활동 기록입니다</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {mockActivities.map(activity => (
-                      <div key={activity.id} className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors">
-                        <div className={`p-2 rounded-full ${
-                          activity.type === "post" ? "bg-blue-100" :
-                          activity.type === "comment" ? "bg-green-100" : "bg-red-100"
-                        }`}>
-                          {activity.type === "post" ? (
-                            <FileText className="h-4 w-4 text-blue-600" />
-                          ) : activity.type === "comment" ? (
-                            <MessageCircle className="h-4 w-4 text-green-600" />
-                          ) : (
-                            <Heart className="h-4 w-4 text-red-500" />
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-foreground line-clamp-1">{activity.title}</p>
-                          <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                            <Badge variant="outline" className="text-xs">{activity.category}</Badge>
-                            <span>{activity.date}</span>
-                          </div>
-                        </div>
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            <TabsContent value="activity">
+              <div className="mb-6">
+                <h2 className="text-lg font-bold text-slate-800">활동 내역</h2>
+                <p className="text-sm text-slate-500 mt-1">커뮤니티 활동 기록</p>
+              </div>
+              <div className="space-y-3">
+                {mockActivities.map((activity) => (
+                  <div 
+                    key={activity.id} 
+                    className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+                  >
+                    <div className={`p-2.5 rounded-xl ${
+                      activity.type === "post" ? "bg-blue-100" :
+                      activity.type === "comment" ? "bg-green-100" : "bg-red-100"
+                    }`}>
+                      {activity.type === "post" ? (
+                        <FileText className="h-5 w-5 text-blue-600" />
+                      ) : activity.type === "comment" ? (
+                        <MessageCircle className="h-5 w-5 text-green-600" />
+                      ) : (
+                        <Heart className="h-5 w-5 text-red-500" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-slate-800 truncate">{activity.title}</p>
+                      <div className="flex items-center gap-2 mt-1 text-sm text-slate-500">
+                        <span className="text-teal-600">{activity.category}</span>
+                        <span>·</span>
+                        <span>{activity.date}</span>
                       </div>
-                    ))}
+                    </div>
+                    <ExternalLink className="h-4 w-4 text-slate-400" />
                   </div>
-                </CardContent>
-              </Card>
+                ))}
+              </div>
             </TabsContent>
 
             {/* Bookmarks Tab */}
-            <TabsContent value="bookmarks" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>저장된 게시글</CardTitle>
-                  <CardDescription>북마크한 게시글 목록입니다</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {mockBookmarks.map(bookmark => (
-                      <div key={bookmark.id} className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer">
-                        <div className="p-2 bg-primary/10 rounded-full">
-                          <Bookmark className="h-4 w-4 text-primary" />
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-foreground line-clamp-1">{bookmark.title}</p>
-                          <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                            <span>{bookmark.author}</span>
-                            <span>·</span>
-                            <Badge variant="outline" className="text-xs">{bookmark.category}</Badge>
-                            <span>·</span>
-                            <span>{bookmark.date}</span>
-                          </div>
-                        </div>
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            <TabsContent value="bookmarks">
+              <div className="mb-6">
+                <h2 className="text-lg font-bold text-slate-800">저장된 게시글</h2>
+                <p className="text-sm text-slate-500 mt-1">북마크한 게시글 목록</p>
+              </div>
+              <div className="space-y-3">
+                {mockBookmarks.map((bookmark) => (
+                  <div 
+                    key={bookmark.id} 
+                    className="flex items-center gap-4 p-4 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+                  >
+                    <div className="p-2.5 bg-teal-100 rounded-xl">
+                      <Bookmark className="h-5 w-5 text-teal-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-slate-800 truncate">{bookmark.title}</p>
+                      <div className="flex items-center gap-2 mt-1 text-sm text-slate-500">
+                        <span>{bookmark.author}</span>
+                        <span>·</span>
+                        <span className="text-teal-600">{bookmark.category}</span>
                       </div>
-                    ))}
+                    </div>
+                    <ExternalLink className="h-4 w-4 text-slate-400" />
                   </div>
-                </CardContent>
-              </Card>
+                ))}
+              </div>
             </TabsContent>
           </Tabs>
         </div>
@@ -442,63 +469,58 @@ export default function MyPage() {
   )
 }
 
-function AnalysisHistoryItem({ 
+function AnalysisCard({ 
   analysis, 
-  showActions = false 
+  showActions = false,
+  delay = 0,
+  isVisible = true
 }: { 
   analysis: AnalysisHistory
-  showActions?: boolean 
+  showActions?: boolean
+  delay?: number
+  isVisible?: boolean
 }) {
   return (
-    <div className="flex items-center gap-4 p-4 rounded-xl border hover:shadow-sm transition-shadow">
-      <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
-        <Palette className="h-8 w-8 text-muted-foreground" />
+    <div 
+      className={`flex items-center gap-4 p-4 bg-slate-50 rounded-xl hover:bg-slate-100 transition-all duration-500 cursor-pointer ${
+        isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+      }`}
+      style={{ transitionDelay: `${delay}ms` }}
+    >
+      <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-teal-100 to-teal-200 flex items-center justify-center">
+        <Palette className="h-7 w-7 text-teal-600" />
       </div>
       
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <h4 className="font-medium text-foreground">{analysis.drawingType}</h4>
-          <Badge variant={analysis.status === "완료" ? "default" : "secondary"}>
+          <h4 className="font-semibold text-slate-800">{analysis.drawingType}</h4>
+          <Badge variant={analysis.status === "완료" ? "default" : "secondary"} className="text-xs">
             {analysis.status}
           </Badge>
         </div>
-        <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 mt-1 text-sm text-slate-500">
           <span>{analysis.childName} ({analysis.childAge})</span>
           <span>·</span>
-          <span className="flex items-center gap-1">
-            <Clock className="h-3 w-3" />
-            {analysis.date}
-          </span>
+          <span>{analysis.date}</span>
         </div>
-        {analysis.status === "완료" && (
-          <div className="flex items-center gap-2 mt-2">
-            <span className="text-sm text-muted-foreground">종합 점수:</span>
-            <span className="font-semibold text-primary">{analysis.overallScore}점</span>
-          </div>
-        )}
       </div>
-      
-      {showActions && analysis.status === "완료" && (
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="gap-1 bg-transparent">
-            <Download className="h-3 w-3" />
-            PDF
-          </Button>
-          <Button variant="outline" size="sm" className="gap-1 bg-transparent">
-            <Share2 className="h-3 w-3" />
-            공유
-          </Button>
-          <Link href="/analysis/result">
-            <Button size="sm" className="gap-1">
-              상세보기
-              <ChevronRight className="h-3 w-3" />
-            </Button>
-          </Link>
+
+      {analysis.status === "완료" && (
+        <div className="text-right">
+          <p className="text-2xl font-bold text-teal-600">{analysis.overallScore}</p>
+          <p className="text-xs text-slate-400">점수</p>
         </div>
       )}
       
-      {!showActions && (
-        <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+      {showActions && analysis.status === "완료" && (
+        <div className="flex gap-2">
+          <Button variant="ghost" size="icon" className="h-9 w-9">
+            <Download className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-9 w-9">
+            <Share2 className="h-4 w-4" />
+          </Button>
+        </div>
       )}
     </div>
   )
@@ -509,49 +531,38 @@ function ChildCard({
   age, 
   gender, 
   birthDate, 
-  analysisCount 
+  analysisCount,
+  color
 }: { 
   name: string
   age: string
   gender: string
   birthDate: string
   analysisCount: number
+  color: string
 }) {
   return (
-    <Card>
-      <CardContent className="p-6">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-4">
-            <Avatar className="h-14 w-14">
-              <AvatarFallback className="bg-primary/10 text-primary text-lg">
-                {name[0]}
-              </AvatarFallback>
-            </Avatar>
-            <div>
-              <h3 className="font-semibold text-foreground">{name}</h3>
-              <p className="text-sm text-muted-foreground">{age} · {gender}</p>
-              <p className="text-xs text-muted-foreground mt-1">생년월일: {birthDate}</p>
-            </div>
-          </div>
-          <Button variant="ghost" size="icon">
-            <Settings className="h-4 w-4" />
-          </Button>
+    <div className="bg-slate-50 rounded-2xl p-5 hover:bg-slate-100 transition-colors cursor-pointer">
+      <div className="flex items-center gap-4">
+        <div className={`w-14 h-14 rounded-full ${color} flex items-center justify-center`}>
+          <span className="text-xl font-bold text-white">{name.charAt(0)}</span>
         </div>
-        
-        <div className="mt-4 pt-4 border-t flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">분석 횟수</span>
-          <span className="font-semibold">{analysisCount}회</span>
+        <div className="flex-1">
+          <h3 className="font-semibold text-slate-800">{name}</h3>
+          <p className="text-sm text-slate-500">{age} · {gender}</p>
         </div>
-        
-        <div className="flex gap-2 mt-4">
-          <Link href="/analysis" className="flex-1">
-            <Button variant="outline" className="w-full bg-transparent">새 분석</Button>
-          </Link>
-          <Link href="/analysis/result" className="flex-1">
-            <Button className="w-full">기록 보기</Button>
-          </Link>
+        <ChevronRight className="h-5 w-5 text-slate-400" />
+      </div>
+      <div className="flex items-center gap-4 mt-4 pt-4 border-t border-slate-200">
+        <div className="flex-1">
+          <p className="text-xs text-slate-400">생년월일</p>
+          <p className="text-sm font-medium text-slate-700">{birthDate}</p>
         </div>
-      </CardContent>
-    </Card>
+        <div className="flex-1">
+          <p className="text-xs text-slate-400">분석 횟수</p>
+          <p className="text-sm font-medium text-slate-700">{analysisCount}회</p>
+        </div>
+      </div>
+    </div>
   )
 }

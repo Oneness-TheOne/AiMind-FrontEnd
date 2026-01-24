@@ -1,8 +1,9 @@
 "use client"
 
 import { useState } from "react"
-import { Header } from "@/components/header"
-import { Footer } from "@/components/footer"
+import { Header } from "@/components/layout/header"
+import { Footer } from "@/components/layout/footer"
+import { VideoHero } from "@/components/shared/video-hero"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -219,17 +220,21 @@ export default function CommunityPage() {
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <Header />
       
+      {/* Video Hero */}
+      <div className="-mt-14">
+        <VideoHero
+          subtitle="부모님들의 소통 공간"
+          title="맘스퀘어"
+          description="부모님들의 이야기를 나누고, 전문가의 조언을 받아보세요."
+          height="small"
+        />
+      </div>
+
       <main className="flex-1">
-        {/* Hero Section */}
-        <div className="bg-white border-b border-slate-100 py-10 md:py-14">
+        {/* Search Section */}
+        <div className="bg-white border-b border-slate-100 py-8">
           <div className="container mx-auto px-4 lg:px-8">
             <div className="text-center max-w-2xl mx-auto">
-              <h1 className="text-2xl md:text-3xl font-bold text-foreground">
-                맘스퀘어
-              </h1>
-              <p className="text-muted-foreground mt-2">
-                부모님들의 이야기를 나누고, 전문가의 조언을 받아보세요
-              </p>
               
               <div className="relative mt-6 max-w-xl mx-auto">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />

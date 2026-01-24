@@ -2,6 +2,7 @@ import React from "react"
 import type { Metadata } from 'next'
 import { Noto_Sans_KR } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import { ChatbotModal } from '@/components/chatbot/chatbot-modal'
 import './globals.css'
 
 const notoSansKr = Noto_Sans_KR({ 
@@ -42,6 +43,7 @@ export default function RootLayout({
     <html lang="ko">
       <body className={`${notoSansKr.variable} font-sans antialiased`}>
         {children}
+        <ChatbotModal />
         <Analytics />
       </body>
     </html>

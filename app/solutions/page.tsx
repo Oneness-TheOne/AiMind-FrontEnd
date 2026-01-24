@@ -1,9 +1,9 @@
 "use client"
 
 import { useState } from "react"
-import { Header } from "@/components/header"
-import { Footer } from "@/components/footer"
-import { VideoHero } from "@/components/video-hero"
+import { Header } from "@/components/layout/header"
+import { Footer } from "@/components/layout/footer"
+import { VideoHero } from "@/components/shared/video-hero"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -175,25 +175,18 @@ export default function SolutionsPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
-      <main className="flex-1 bg-gradient-to-b from-secondary/30 to-background">
-        {/* Hero Section */}
-        <section className="py-12 md:py-20">
-          <div className="container mx-auto px-4">
-            <div className="text-center max-w-3xl mx-auto mb-12">
-              <Badge variant="secondary" className="mb-4 bg-primary/10 text-primary">
-                <Sparkles className="h-3 w-3 mr-1" />
-                맞춤 솔루션
-              </Badge>
-              <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-                아이에게 맞는 솔루션을 찾아보세요
-              </h1>
-              <p className="text-muted-foreground">
-                전문가가 제안하는 다양한 치료법과 활동을 통해 아이의 건강한 정서 발달을 도와주세요.
-                가정에서 쉽게 실천할 수 있는 활동들을 소개합니다.
-              </p>
-            </div>
-          </div>
-        </section>
+      
+      {/* Video Hero */}
+      <div className="-mt-14">
+        <VideoHero
+          subtitle="전문가 추천"
+          title="맞춤 솔루션"
+          description="전문가가 제안하는 다양한 치료법과 활동을 통해 아이의 건강한 정서 발달을 도와주세요."
+          height="small"
+        />
+      </div>
+
+      <main className="flex-1 bg-slate-50">
 
         {/* Main Content */}
         <section className="pb-20">
