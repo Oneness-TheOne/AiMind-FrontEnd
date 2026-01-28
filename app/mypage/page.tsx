@@ -29,6 +29,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { DiaryOCR } from "@/components/mypage/diary-ocr"
+import { Pagination } from "@/components/ui/pagination-simple"
 
 interface AnalysisHistory {
   id: string
@@ -140,9 +141,18 @@ const developmentData = [
   { key: "creative", current: 85, previous: 80, label: "창의성", color: "bg-amber-500" }
 ]
 
+const ITEMS_PER_PAGE = 3
+
 export default function MyPage() {
   const [activeTab, setActiveTab] = useState("overview")
   const [isVisible, setIsVisible] = useState(false)
+  const [historyPage, setHistoryPage] = useState(1)
+
+  const totalHistoryPages = Math.ceil(mockAnalysisHistory.length / ITEMS_PER_PAGE)
+  const paginatedHistory = mockAnalysisHistory.slice(
+    (historyPage - 1) * ITEMS_PER_PAGE,
+    historyPage * ITEMS_PER_PAGE
+  )
 
   useEffect(() => {
     setIsVisible(true)
@@ -334,7 +344,7 @@ export default function MyPage() {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="text-lg font-bold text-slate-800">분석 기록</h2>
-                  <p className="text-sm text-slate-500 mt-1">지금까지 진행한 모든 그림 분석 기록</p>
+                  <p className="text-sm text-slate-500 mt-1">지금까지 진행한 모든 그림 분석 기록 ({mockAnalysisHistory.length}건)</p>
                 </div>
                 <Link href="/analysis">
                   <Button className="gap-2">
@@ -344,7 +354,7 @@ export default function MyPage() {
                 </Link>
               </div>
               <div className="space-y-3">
-                {mockAnalysisHistory.map((analysis, index) => (
+                {paginatedHistory.map((analysis, index) => (
                   <AnalysisCard 
                     key={analysis.id} 
                     analysis={analysis} 
@@ -354,6 +364,13 @@ export default function MyPage() {
                   />
                 ))}
               </div>
+              {totalHistoryPages > 1 && (
+                <Pagination
+                  currentPage={historyPage}
+                  totalPages={totalHistoryPages}
+                  onPageChange={setHistoryPage}
+                />
+              )}
             </TabsContent>
 
             {/* Diary OCR Tab */}

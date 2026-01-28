@@ -71,7 +71,7 @@ export function DailyTipSection() {
                       <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center mb-3">
                         <Smartphone className="w-6 h-6 text-white" />
                       </div>
-                      <span className="text-white font-medium text-sm">아이마음</span>
+                      <span className="text-white font-medium text-sm">마음그림</span>
                     </div>
                   </div>
                 </div>

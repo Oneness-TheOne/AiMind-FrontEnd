@@ -61,7 +61,7 @@ export default function LoginPage() {
                   <path d="M8 13c1.5 2 3 3 4 3s2.5-1 4-3" />
                 </svg>
               </div>
-              <span className="text-2xl font-bold text-foreground">아이마음</span>
+              <span className="text-2xl font-bold text-foreground">마음그림</span>
             </Link>
             <p className="text-muted-foreground">아이의 마음을 이해하는 첫 걸음</p>
           </div>

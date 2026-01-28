@@ -71,7 +71,7 @@ export function FeaturesSection() {
             단순한 그림 분석이 아닙니다
           </p>
           <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold text-foreground">
-            아이마음은 아이의 마음을 이해하는 동반자입니다
+            마음그림은 아이의 마음을 이해하는 동반자입니다
           </h2>
         </div>
 

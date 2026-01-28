@@ -18,6 +18,7 @@ import {
   ImageIcon,
   Calendar
 } from "lucide-react"
+import { Pagination } from "@/components/ui/pagination-simple"
 
 interface DiaryEntry {
   id: string
@@ -27,6 +28,8 @@ interface DiaryEntry {
   childName: string
 }
 
+const ENTRIES_PER_PAGE = 3
+
 export function DiaryOCR() {
   const [uploadedImage, setUploadedImage] = useState<string | null>(null)
   const [extractedText, setExtractedText] = useState<string>("")
@@ -34,6 +37,7 @@ export function DiaryOCR() {
   const [isCopied, setIsCopied] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
   const sectionRef = useRef<HTMLDivElement>(null)
   const [savedEntries, setSavedEntries] = useState<DiaryEntry[]>([
     {
@@ -55,6 +59,12 @@ export function DiaryOCR() {
   useEffect(() => {
     setIsVisible(true)
   }, [])
+
+  const totalPages = Math.ceil(savedEntries.length / ENTRIES_PER_PAGE)
+  const paginatedEntries = savedEntries.slice(
+    (currentPage - 1) * ENTRIES_PER_PAGE,
+    currentPage * ENTRIES_PER_PAGE
+  )
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -320,7 +330,7 @@ export function DiaryOCR() {
           </div>
         ) : (
           <div className="space-y-3">
-            {savedEntries.map((entry, index) => (
+            {paginatedEntries.map((entry, index) => (
               <div
                 key={entry.id}
                 className={`flex gap-4 p-4 bg-slate-50 rounded-xl hover:bg-slate-100 transition-all duration-500 cursor-pointer ${
@@ -357,6 +367,13 @@ export function DiaryOCR() {
                 </Button>
               </div>
             ))}
+            {totalPages > 1 && (
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+              />
+            )}
           </div>
         )}
       </div>

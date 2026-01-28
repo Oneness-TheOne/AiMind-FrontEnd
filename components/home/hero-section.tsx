@@ -32,7 +32,7 @@ export function HeroSection() {
             <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white leading-tight">
               아이의 마음을 이해하는 시대,
               <br />
-              <span className="text-primary">아이마음</span>
+              <span className="text-primary">마음그림</span>
             </h1>
             
             <p className="mt-6 text-base md:text-lg text-white/90 leading-relaxed">

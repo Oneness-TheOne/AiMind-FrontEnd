@@ -44,7 +44,7 @@ export function Header() {
         {/* Logo */}
         <Link href="/" className="flex items-center gap-1 shrink-0">
           <span className={`text-xl font-bold ${showTransparent ? "text-primary" : "text-primary"}`}>
-            아이마음
+            마음그림
           </span>
           <span className={`text-xl font-bold ${showTransparent ? "text-white" : "text-foreground"}`}>
             센터
@@ -99,7 +99,7 @@ export function Header() {
           <SheetContent side="right" className="w-[280px] sm:w-[320px]">
             <div className="flex flex-col gap-4 pt-6">
               <Link href="/" onClick={() => setIsOpen(false)} className="flex items-center gap-1 px-4 mb-2">
-                <span className="text-lg font-bold text-primary">아이마음</span>
+                <span className="text-lg font-bold text-primary">마음그림</span>
                 <span className="text-lg font-bold text-foreground">센터</span>
               </Link>
               <nav className="flex flex-col">

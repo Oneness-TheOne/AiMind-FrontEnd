@@ -59,11 +59,11 @@ export function CTASection() {
         {/* Header */}
         <div className="text-center mb-10">
           <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-4">
-            아이마음 맞춤 분석 프로세스
+            마음그림 맞춤 분석 프로세스
           </h2>
           <p className="text-muted-foreground text-sm md:text-base max-w-2xl mx-auto leading-relaxed">
             아이의 마음을 더 쉽게 이해할 수 있도록, 부모님의 첫걸음이 헛되지 않도록,<br className="hidden md:block" />
-            아이마음 전문 분석 서비스가 책임집니다
+            마음그림 전문 분석 서비스가 책임집니다
           </p>
         </div>
 

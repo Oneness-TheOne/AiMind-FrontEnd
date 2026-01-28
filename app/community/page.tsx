@@ -1,15 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { VideoHero } from "@/components/shared/video-hero"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { 
   Search, 
   MessageCircle, 
@@ -19,18 +16,12 @@ import {
   Clock,
   PenSquare,
   Bookmark,
-  MoreHorizontal,
-  ChevronRight,
+  Award,
   Users,
-  Award
+  ChevronRight
 } from "lucide-react"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import Link from "next/link"
+import { Pagination } from "@/components/ui/pagination-simple"
 
 interface Post {
   id: string
@@ -38,7 +29,6 @@ interface Post {
   content: string
   author: {
     name: string
-    avatar?: string
     badge?: string
   }
   category: string
@@ -49,15 +39,6 @@ interface Post {
   isLiked: boolean
   isBookmarked: boolean
   tags: string[]
-}
-
-interface Expert {
-  id: string
-  name: string
-  title: string
-  avatar?: string
-  specialty: string
-  answerCount: number
 }
 
 const categories = [
@@ -128,20 +109,6 @@ const mockPosts: Post[] = [
   },
   {
     id: "5",
-    title: "놀이치료 vs 미술치료, 어떤 게 더 좋을까요?",
-    content: "발달검사 받고 치료를 권유받았는데 놀이치료랑 미술치료 중에 뭐가 더 효과적일지 고민이에요.",
-    author: { name: "궁금한아빠" },
-    category: "qna",
-    createdAt: "2일 전",
-    views: 456,
-    likes: 34,
-    comments: 28,
-    isLiked: false,
-    isBookmarked: false,
-    tags: ["놀이치료", "미술치료", "치료선택"]
-  },
-  {
-    id: "6",
     title: "집에서 할 수 있는 정서 발달 놀이 5가지 공유해요!",
     content: "심리상담사님께 배운 집에서 쉽게 할 수 있는 정서 발달 놀이들 공유합니다. 우리 아이한테 효과 좋았어요!",
     author: { name: "놀이대장맘", badge: "인기 작성자" },
@@ -156,36 +123,51 @@ const mockPosts: Post[] = [
   }
 ]
 
-const mockExperts: Expert[] = [
-  {
-    id: "1",
-    name: "김미영",
-    title: "아동심리상담사",
-    specialty: "발달심리",
-    answerCount: 234
-  },
-  {
-    id: "2",
-    name: "이수진",
-    title: "미술치료사",
-    specialty: "미술치료",
-    answerCount: 189
-  },
-  {
-    id: "3",
-    name: "박정훈",
-    title: "놀이치료사",
-    specialty: "놀이치료",
-    answerCount: 156
-  }
+const mockExperts = [
+  { id: "1", name: "김미영", title: "아동심리상담사", answerCount: 234, color: "bg-teal-500" },
+  { id: "2", name: "이수진", title: "미술치료사", answerCount: 189, color: "bg-cyan-500" },
+  { id: "3", name: "박정훈", title: "놀이치료사", answerCount: 156, color: "bg-emerald-500" }
 ]
 
-const popularTags = ["그림분석", "발달검사", "미술치료", "놀이치료", "정서발달", "5세", "7세", "불안", "ADHD", "부모상담"]
+const popularTags = ["그림분석", "발달검사", "미술치료", "놀이치료", "정서발달", "5세", "7세", "불안"]
+
+// Scroll animation hook
+function useScrollAnimation() {
+  const ref = useRef<HTMLDivElement>(null)
+  const [isVisible, setIsVisible] = useState(false)
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true)
+        }
+      },
+      { threshold: 0.1 }
+    )
+
+    if (ref.current) {
+      observer.observe(ref.current)
+    }
+
+    return () => observer.disconnect()
+  }, [])
+
+  return { ref, isVisible }
+}
+
+const POSTS_PER_PAGE = 5
 
 export default function CommunityPage() {
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [searchQuery, setSearchQuery] = useState("")
   const [posts, setPosts] = useState(mockPosts)
+  const [sortBy, setSortBy] = useState<"popular" | "latest">("popular")
+  const [currentPage, setCurrentPage] = useState(1)
+
+  const heroAnim = useScrollAnimation()
+  const searchAnim = useScrollAnimation()
+  const contentAnim = useScrollAnimation()
 
   const filteredPosts = posts.filter(post => {
     const matchesCategory = selectedCategory === "all" || post.category === selectedCategory
@@ -193,6 +175,22 @@ export default function CommunityPage() {
       post.content.toLowerCase().includes(searchQuery.toLowerCase())
     return matchesCategory && matchesSearch
   })
+
+  const totalPages = Math.ceil(filteredPosts.length / POSTS_PER_PAGE)
+  const paginatedPosts = filteredPosts.slice(
+    (currentPage - 1) * POSTS_PER_PAGE,
+    currentPage * POSTS_PER_PAGE
+  )
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  // Reset page when filter changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [selectedCategory, searchQuery])
 
   const toggleLike = (postId: string) => {
     setPosts(prev => prev.map(post => {
@@ -216,8 +214,16 @@ export default function CommunityPage() {
     }))
   }
 
+  const categoryLabels: Record<string, string> = {
+    free: "자유게시판",
+    tips: "육아 꿀팁",
+    qna: "Q&A",
+    review: "상담 후기",
+    expert: "전문가 칼럼"
+  }
+
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="min-h-screen bg-white flex flex-col">
       <Header />
       
       {/* Video Hero */}
@@ -232,188 +238,290 @@ export default function CommunityPage() {
 
       <main className="flex-1">
         {/* Search Section */}
-        <div className="bg-white border-b border-slate-100 py-8">
+        <div 
+          ref={searchAnim.ref}
+          className={`py-10 transition-all duration-700 ${
+            searchAnim.isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+          }`}
+        >
           <div className="container mx-auto px-4 lg:px-8">
-            <div className="text-center max-w-2xl mx-auto">
-              
-              <div className="relative mt-6 max-w-xl mx-auto">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+            <div className="max-w-2xl mx-auto">
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
                 <Input
                   placeholder="궁금한 내용을 검색해보세요"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-12 h-12 text-base rounded-lg border-slate-200 bg-slate-50 focus:bg-white"
+                  className="pl-12 h-14 text-base rounded-full border-slate-200 bg-slate-50 focus:bg-white shadow-sm"
                 />
               </div>
 
               <div className="flex flex-wrap justify-center gap-2 mt-4">
-                {popularTags.slice(0, 6).map(tag => (
-                  <Badge 
+                {popularTags.map(tag => (
+                  <button 
                     key={tag} 
-                    variant="secondary" 
-                    className="cursor-pointer hover:bg-primary/10 hover:text-primary bg-slate-100 text-slate-600"
+                    className="px-3 py-1.5 text-sm text-slate-500 hover:text-primary hover:bg-primary/5 rounded-full transition-colors"
                     onClick={() => setSearchQuery(tag)}
                   >
                     #{tag}
-                  </Badge>
+                  </button>
                 ))}
               </div>
             </div>
           </div>
         </div>
 
-        <div className="container mx-auto px-4 lg:px-8 py-8">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-            {/* Main Content */}
-            <div className="lg:col-span-3 space-y-6">
-              {/* Category Tabs */}
-              <div className="flex items-center justify-between bg-white rounded-xl p-4 border border-slate-100">
-                <Tabs value={selectedCategory} onValueChange={setSelectedCategory} className="w-full">
-                  <div className="flex items-center justify-between">
-                    <TabsList className="bg-slate-100 overflow-x-auto">
-                      {categories.map(category => (
-                        <TabsTrigger 
-                          key={category.id} 
-                          value={category.id}
-                          className="whitespace-nowrap data-[state=active]:bg-white"
-                        >
-                          {category.label}
-                        </TabsTrigger>
-                      ))}
-                    </TabsList>
-                    
-                    <Link href="/community/write">
-                      <Button className="gap-2 hidden md:flex rounded-full">
-                        <PenSquare className="h-4 w-4" />
-                        글쓰기
-                      </Button>
-                    </Link>
-                  </div>
-                </Tabs>
+        {/* Stats Bar */}
+        <div className="border-y border-slate-100 bg-slate-50/50">
+          <div className="container mx-auto px-4 lg:px-8 py-6">
+            <div className="flex justify-center gap-12 md:gap-20">
+              <div className="text-center">
+                <p className="text-2xl font-bold text-slate-800">12,345</p>
+                <p className="text-xs text-slate-500 mt-1">회원</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-slate-800">5,678</p>
+                <p className="text-xs text-slate-500 mt-1">게시글</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-slate-800">23,456</p>
+                <p className="text-xs text-slate-500 mt-1">댓글</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-primary">89</p>
+                <p className="text-xs text-slate-500 mt-1">전문가</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div 
+          ref={contentAnim.ref}
+          className={`container mx-auto px-4 lg:px-8 py-10 transition-all duration-700 delay-100 ${
+            contentAnim.isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+          }`}
+        >
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-10">
+            {/* Posts */}
+            <div className="lg:col-span-3">
+              {/* Category & Sort */}
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-2 overflow-x-auto pb-2">
+                  {categories.map(category => (
+                    <button
+                      key={category.id}
+                      onClick={() => setSelectedCategory(category.id)}
+                      className={`px-4 py-2 text-sm font-medium rounded-full whitespace-nowrap transition-all ${
+                        selectedCategory === category.id
+                          ? "bg-primary text-white"
+                          : "text-slate-600 hover:bg-slate-100"
+                      }`}
+                    >
+                      {category.label}
+                    </button>
+                  ))}
+                </div>
+                
+                <Link href="/community/write" className="hidden md:block">
+                  <Button className="gap-2 rounded-full">
+                    <PenSquare className="h-4 w-4" />
+                    글쓰기
+                  </Button>
+                </Link>
               </div>
 
-              {/* Sort Options */}
-              <div className="flex items-center gap-4 text-sm">
-                <button className="flex items-center gap-1 text-primary font-medium">
+              {/* Sort */}
+              <div className="flex items-center gap-4 mb-6 text-sm">
+                <button 
+                  onClick={() => setSortBy("popular")}
+                  className={`flex items-center gap-1.5 ${sortBy === "popular" ? "text-primary font-medium" : "text-slate-500"}`}
+                >
                   <TrendingUp className="h-4 w-4" />
                   인기순
                 </button>
-                <button className="flex items-center gap-1 text-muted-foreground hover:text-foreground">
+                <button 
+                  onClick={() => setSortBy("latest")}
+                  className={`flex items-center gap-1.5 ${sortBy === "latest" ? "text-primary font-medium" : "text-slate-500"}`}
+                >
                   <Clock className="h-4 w-4" />
                   최신순
                 </button>
               </div>
 
               {/* Posts List */}
-              <div className="space-y-4">
-                {filteredPosts.map(post => (
-                  <PostCard 
+              <div className="divide-y divide-slate-100">
+                {paginatedPosts.map((post, index) => (
+                  <article 
                     key={post.id} 
-                    post={post} 
-                    onLike={() => toggleLike(post.id)}
-                    onBookmark={() => toggleBookmark(post.id)}
-                  />
+                    className="py-6 first:pt-0 transition-all duration-300 hover:bg-slate-50/50 -mx-4 px-4 rounded-lg"
+                    style={{ animationDelay: `${index * 50}ms` }}
+                  >
+                    <div className="flex items-start gap-4">
+                      <Avatar className="h-10 w-10 hidden sm:flex shrink-0">
+                        <AvatarFallback className={`text-white text-sm ${
+                          post.author.badge === "전문가" ? "bg-primary" : "bg-slate-400"
+                        }`}>
+                          {post.author.name[0]}
+                        </AvatarFallback>
+                      </Avatar>
+                      
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs text-primary font-medium">
+                            {categoryLabels[post.category]}
+                          </span>
+                          {post.author.badge && (
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${
+                              post.author.badge === "전문가" 
+                                ? "bg-primary/10 text-primary" 
+                                : "bg-slate-100 text-slate-600"
+                            }`}>
+                              {post.author.badge}
+                            </span>
+                          )}
+                        </div>
+                        
+                        <Link href={`/community/${post.id}`}>
+                          <h3 className="font-semibold text-slate-800 hover:text-primary transition-colors line-clamp-1">
+                            {post.title}
+                          </h3>
+                        </Link>
+                        
+                        <p className="text-sm text-slate-500 mt-1 line-clamp-1">
+                          {post.content}
+                        </p>
+                        
+                        <div className="flex items-center justify-between mt-3">
+                          <div className="flex items-center gap-2 text-xs text-slate-400">
+                            <span>{post.author.name}</span>
+                            <span>·</span>
+                            <span>{post.createdAt}</span>
+                          </div>
+                          
+                          <div className="flex items-center gap-4">
+                            <button 
+                              className={`flex items-center gap-1 text-xs transition-colors ${
+                                post.isLiked ? "text-red-500" : "text-slate-400 hover:text-red-500"
+                              }`}
+                              onClick={() => toggleLike(post.id)}
+                            >
+                              <Heart className={`h-3.5 w-3.5 ${post.isLiked ? "fill-current" : ""}`} />
+                              {post.likes}
+                            </button>
+                            <span className="flex items-center gap-1 text-xs text-slate-400">
+                              <MessageCircle className="h-3.5 w-3.5" />
+                              {post.comments}
+                            </span>
+                            <span className="flex items-center gap-1 text-xs text-slate-400">
+                              <Eye className="h-3.5 w-3.5" />
+                              {post.views}
+                            </span>
+                            <button 
+                              className={`transition-colors ${
+                                post.isBookmarked ? "text-primary" : "text-slate-400 hover:text-primary"
+                              }`}
+                              onClick={() => toggleBookmark(post.id)}
+                            >
+                              <Bookmark className={`h-3.5 w-3.5 ${post.isBookmarked ? "fill-current" : ""}`} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </article>
                 ))}
               </div>
 
-              {filteredPosts.length === 0 && (
-                <div className="text-center py-12">
-                  <p className="text-muted-foreground">검색 결과가 없습니다</p>
+              {paginatedPosts.length === 0 && (
+                <div className="text-center py-16">
+                  <p className="text-slate-400">검색 결과가 없습니다</p>
                 </div>
               )}
-            </div>
 
-            {/* Sidebar */}
-            <div className="space-y-6">
-              {/* Write Button (Mobile) */}
-              <Link href="/community/write" className="block md:hidden">
-                <Button className="w-full gap-2">
+              {/* Pagination */}
+              {filteredPosts.length > 0 && (
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={handlePageChange}
+                />
+              )}
+
+              {/* Mobile Write Button */}
+              <Link href="/community/write" className="block md:hidden mt-6">
+                <Button className="w-full gap-2 rounded-full">
                   <PenSquare className="h-4 w-4" />
                   글쓰기
                 </Button>
               </Link>
+            </div>
 
+            {/* Sidebar */}
+            <div className="space-y-8">
               {/* Active Experts */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Award className="h-4 w-4 text-primary" />
-                    활동 중인 전문가
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                  <Award className="h-4 w-4 text-primary" />
+                  활동 중인 전문가
+                </h3>
+                <div className="space-y-3">
                   {mockExperts.map(expert => (
-                    <div key={expert.id} className="flex items-center gap-3">
+                    <div 
+                      key={expert.id} 
+                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer"
+                    >
                       <Avatar className="h-10 w-10">
-                        <AvatarFallback className="bg-primary/10 text-primary">
+                        <AvatarFallback className={`${expert.color} text-white text-sm`}>
                           {expert.name[0]}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm text-foreground">{expert.name}</p>
-                        <p className="text-xs text-muted-foreground">{expert.title}</p>
+                        <p className="font-medium text-sm text-slate-800">{expert.name}</p>
+                        <p className="text-xs text-slate-500">{expert.title}</p>
                       </div>
-                      <Badge variant="secondary" className="text-xs">
+                      <span className="text-xs text-slate-400">
                         답변 {expert.answerCount}
-                      </Badge>
+                      </span>
                     </div>
                   ))}
-                </CardContent>
-              </Card>
+                </div>
+                <button className="w-full mt-3 text-sm text-primary hover:underline flex items-center justify-center gap-1">
+                  전문가 더보기 <ChevronRight className="h-3 w-3" />
+                </button>
+              </div>
 
               {/* Popular Tags */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4 text-primary" />
-                    인기 태그
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex flex-wrap gap-2">
-                    {popularTags.map(tag => (
-                      <Badge 
-                        key={tag} 
-                        variant="outline" 
-                        className="cursor-pointer hover:bg-secondary"
-                        onClick={() => setSearchQuery(tag)}
-                      >
-                        #{tag}
-                      </Badge>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+              <div>
+                <h3 className="text-sm font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4 text-primary" />
+                  인기 태그
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {popularTags.map(tag => (
+                    <button 
+                      key={tag} 
+                      className="px-3 py-1.5 text-xs text-slate-600 bg-slate-100 hover:bg-primary/10 hover:text-primary rounded-full transition-colors"
+                      onClick={() => setSearchQuery(tag)}
+                    >
+                      #{tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-              {/* Community Stats */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Users className="h-4 w-4 text-primary" />
-                    커뮤니티 현황
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 gap-4 text-center">
-                    <div>
-                      <p className="text-2xl font-bold text-foreground">12,345</p>
-                      <p className="text-xs text-muted-foreground">회원 수</p>
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-foreground">5,678</p>
-                      <p className="text-xs text-muted-foreground">게시글</p>
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-foreground">23,456</p>
-                      <p className="text-xs text-muted-foreground">댓글</p>
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-foreground">89</p>
-                      <p className="text-xs text-muted-foreground">전문가</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              {/* Banner */}
+              <div className="bg-gradient-to-br from-primary to-teal-600 rounded-2xl p-6 text-white">
+                <h4 className="font-semibold mb-2">전문가 상담 받기</h4>
+                <p className="text-sm text-white/80 mb-4">
+                  우리 아이 맞춤 상담을 받아보세요
+                </p>
+                <Link href="/counseling">
+                  <Button size="sm" variant="secondary" className="bg-white text-primary hover:bg-white/90">
+                    상담 신청
+                  </Button>
+                </Link>
+              </div>
             </div>
           </div>
         </div>
@@ -421,113 +529,5 @@ export default function CommunityPage() {
 
       <Footer />
     </div>
-  )
-}
-
-function PostCard({ 
-  post, 
-  onLike, 
-  onBookmark 
-}: { 
-  post: Post
-  onLike: () => void
-  onBookmark: () => void 
-}) {
-  const categoryLabels: Record<string, string> = {
-    free: "자유게시판",
-    tips: "육아 꿀팁",
-    qna: "Q&A",
-    review: "상담 후기",
-    expert: "전문가 칼럼"
-  }
-
-  return (
-    <Card className="hover:shadow-md transition-shadow">
-      <CardContent className="p-4 md:p-5">
-        <div className="flex items-start gap-3">
-          <Avatar className="h-10 w-10 hidden md:flex">
-            <AvatarFallback className="bg-primary/10 text-primary text-sm">
-              {post.author.name[0]}
-            </AvatarFallback>
-          </Avatar>
-          
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <Badge variant="secondary" className="text-xs">
-                {categoryLabels[post.category]}
-              </Badge>
-              {post.author.badge && (
-                <Badge 
-                  variant={post.author.badge === "전문가" ? "default" : "outline"} 
-                  className="text-xs"
-                >
-                  {post.author.badge}
-                </Badge>
-              )}
-            </div>
-            
-            <Link href={`/community/${post.id}`}>
-              <h3 className="font-semibold text-foreground mt-2 hover:text-primary transition-colors line-clamp-2">
-                {post.title}
-              </h3>
-            </Link>
-            
-            <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-              {post.content}
-            </p>
-            
-            <div className="flex flex-wrap gap-1 mt-2">
-              {post.tags.map(tag => (
-                <span key={tag} className="text-xs text-primary">
-                  #{tag}
-                </span>
-              ))}
-            </div>
-            
-            <div className="flex items-center justify-between mt-3">
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <Avatar className="h-5 w-5 md:hidden">
-                    <AvatarFallback className="text-xs bg-primary/10 text-primary">
-                      {post.author.name[0]}
-                    </AvatarFallback>
-                  </Avatar>
-                  {post.author.name}
-                </span>
-                <span>{post.createdAt}</span>
-              </div>
-              
-              <div className="flex items-center gap-3">
-                <button 
-                  className={`flex items-center gap-1 text-sm transition-colors ${
-                    post.isLiked ? "text-red-500" : "text-muted-foreground hover:text-red-500"
-                  }`}
-                  onClick={onLike}
-                >
-                  <Heart className={`h-4 w-4 ${post.isLiked ? "fill-current" : ""}`} />
-                  {post.likes}
-                </button>
-                <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                  <MessageCircle className="h-4 w-4" />
-                  {post.comments}
-                </span>
-                <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                  <Eye className="h-4 w-4" />
-                  {post.views}
-                </span>
-                <button 
-                  className={`transition-colors ${
-                    post.isBookmarked ? "text-primary" : "text-muted-foreground hover:text-primary"
-                  }`}
-                  onClick={onBookmark}
-                >
-                  <Bookmark className={`h-4 w-4 ${post.isBookmarked ? "fill-current" : ""}`} />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   )
 }

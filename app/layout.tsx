@@ -12,7 +12,7 @@ const notoSansKr = Noto_Sans_KR({
 });
 
 export const metadata: Metadata = {
-  title: '아이마음 - 아동 그림 심리 분석 서비스',
+  title: '꿈틀 - 아동 그림 심리 분석 서비스',
   description: 'AI 기반 아동 그림 심리 분석으로 우리 아이의 마음을 이해하세요. 발달 단계 평가, 또래 비교, 맞춤 솔루션을 제공합니다.',
   generator: 'v0.app',
   icons: {
