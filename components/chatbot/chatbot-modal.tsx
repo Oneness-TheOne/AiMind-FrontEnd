@@ -18,7 +18,7 @@ const initialMessages: Message[] = [
   {
     id: "1",
     role: "assistant",
-    content: "안녕하세요! 마음그림 상담 도우미입니다. 아이의 그림 심리 분석이나 서비스 이용에 대해 궁금한 점이 있으시면 편하게 물어보세요.",
+    content: "안녕하세요! 아이마음 상담 도우미입니다. 아이의 그림 심리 분석이나 서비스 이용에 대해 궁금한 점이 있으시면 편하게 물어보세요.",
     timestamp: new Date(),
   },
 ]
@@ -109,7 +109,7 @@ export function ChatbotModal() {
               <Bot className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h3 className="font-semibold text-white text-sm">마음그림 상담 도우미</h3>
+              <h3 className="font-semibold text-white text-sm">아이마음 상담 도우미</h3>
               <p className="text-white/80 text-xs">무엇이든 물어보세요</p>
             </div>
           </div>
