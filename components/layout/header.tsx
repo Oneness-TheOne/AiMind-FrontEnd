@@ -70,7 +70,7 @@ export function Header() {
 
         {/* Desktop CTA */}
         <div className="hidden lg:block">
-          <Link href="/analysis">
+          <Link href="/login">
             <Button 
               size="sm" 
               className={`rounded-md px-6 h-9 ${
@@ -79,7 +79,7 @@ export function Header() {
                   : ""
               }`}
             >
-              상담 문의
+              로그인
             </Button>
           </Link>
         </div>
@@ -119,9 +119,9 @@ export function Header() {
                 })}
               </nav>
               <div className="border-t border-slate-100 pt-4 px-4">
-                <Link href="/analysis" onClick={() => setIsOpen(false)}>
+                <Link href="/login" onClick={() => setIsOpen(false)}>
                   <Button className="w-full">
-                    상담 문의
+                    로그인
                   </Button>
                 </Link>
               </div>
