@@ -25,7 +25,6 @@ export default function AnalysisPage() {
     name: "",
     age: "",
     gender: "",
-    drawingType: "",
   })
   const [isDragging, setIsDragging] = useState(false)
 
@@ -67,14 +66,6 @@ export default function AnalysisPage() {
     // Store data and navigate to analyzing page
     router.push("/analysis/analyzing")
   }
-
-  const drawingTypes = [
-    { value: "house-tree-person", label: "집-나무-사람 (HTP)" },
-    { value: "family", label: "가족화" },
-    { value: "kinetic-family", label: "동적 가족화 (KFD)" },
-    { value: "free", label: "자유화" },
-    { value: "person", label: "인물화" },
-  ]
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -203,7 +194,7 @@ export default function AnalysisPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 md:grid-cols-3">
                     <div className="space-y-2">
                       <Label htmlFor="name">아이 이름 (별명)</Label>
                       <Input
@@ -215,35 +206,16 @@ export default function AnalysisPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="drawingType">그림 유형</Label>
-                      <Select
-                        value={childInfo.drawingType}
-                        onValueChange={(value) => setChildInfo({ ...childInfo, drawingType: value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="그림 유형 선택" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {drawingTypes.map((type) => (
-                            <SelectItem key={type.value} value={type.value}>
-                              {type.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
                       <Label htmlFor="age">나이</Label>
                       <Select
                         value={childInfo.age}
                         onValueChange={(value) => setChildInfo({ ...childInfo, age: value })}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className="w-full">
                           <SelectValue placeholder="나이 선택" />
                         </SelectTrigger>
                         <SelectContent>
-                          {Array.from({ length: 13 }, (_, i) => i + 3).map((age) => (
+                          {Array.from({ length: 7 }, (_, i) => i + 7).map((age) => (
                             <SelectItem key={age} value={age.toString()}>
                               {age}세
                             </SelectItem>
@@ -258,7 +230,7 @@ export default function AnalysisPage() {
                         value={childInfo.gender}
                         onValueChange={(value) => setChildInfo({ ...childInfo, gender: value })}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className="w-full">
                           <SelectValue placeholder="성별 선택" />
                         </SelectTrigger>
                         <SelectContent>
@@ -274,7 +246,7 @@ export default function AnalysisPage() {
                       className="w-full gap-2"
                       size="lg"
                       onClick={handleAnalyze}
-                      disabled={!uploadedImage || !childInfo.age || !childInfo.drawingType}
+                      disabled={!uploadedImage || !childInfo.age}
                     >
                       분석 시작하기
                       <ArrowRight className="h-4 w-4" />

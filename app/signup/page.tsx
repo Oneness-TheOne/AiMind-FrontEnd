@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Eye, EyeOff, ArrowLeft, Check } from "lucide-react"
 
 export default function SignupPage() {
@@ -18,12 +17,12 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
   const [formData, setFormData] = useState({
     email: "",
     password: "",
     confirmPassword: "",
     name: "",
-    childAge: "",
     agreeTerms: false,
     agreePrivacy: false,
     agreeMarketing: false,
@@ -37,15 +36,40 @@ export default function SignupPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!formData.agreeTerms || !formData.agreePrivacy) {
+      alert("이용약관과 개인정보처리방침에 동의해주세요.")
+      return
+    }
     if (formData.password !== formData.confirmPassword) {
       alert("비밀번호가 일치하지 않습니다.")
       return
     }
     setIsLoading(true)
-    // Simulate signup - will be replaced with actual auth
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    setIsLoading(false)
-    router.push("/login")
+    try {
+      const response = await fetch(`${apiBaseUrl}/auth/signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          password: formData.password,
+          agree_terms: formData.agreeTerms,
+          agree_privacy: formData.agreePrivacy,
+          agree_marketing: formData.agreeMarketing,
+        }),
+      })
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        const message = errorData?.detail?.message || "회원가입에 실패했습니다."
+        throw new Error(message)
+      }
+      setIsLoading(false)
+      router.push("/login")
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "회원가입에 실패했습니다."
+      alert(message)
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -193,26 +217,6 @@ export default function SignupPage() {
                   {formData.confirmPassword && formData.password !== formData.confirmPassword && (
                     <p className="text-xs text-destructive">비밀번호가 일치하지 않습니다</p>
                   )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="childAge">자녀 연령대</Label>
-                  <Select
-                    value={formData.childAge}
-                    onValueChange={(value) => setFormData({ ...formData, childAge: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="자녀 연령대를 선택하세요" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="3-4">3-4세</SelectItem>
-                      <SelectItem value="5-6">5-6세</SelectItem>
-                      <SelectItem value="7-8">7-8세</SelectItem>
-                      <SelectItem value="9-10">9-10세</SelectItem>
-                      <SelectItem value="11-12">11-12세</SelectItem>
-                      <SelectItem value="13+">13세 이상</SelectItem>
-                    </SelectContent>
-                  </Select>
                 </div>
 
                 <div className="space-y-3 pt-2">

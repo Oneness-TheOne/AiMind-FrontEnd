@@ -1,15 +1,19 @@
+"use client"
+
 import Link from "next/link"
-import { notFound } from "next/navigation"
+import { useParams } from "next/navigation"
+import { useEffect, useState } from "react"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Award, Bookmark, Eye, Heart, MessageCircle, ChevronRight } from "lucide-react"
 
 interface Post {
-  id: string
+  id: number
   title: string
   content: string
   author: {
+    id?: number | null
     name: string
     badge?: string
   }
@@ -23,78 +27,19 @@ interface Post {
   tags: string[]
 }
 
-const mockPosts: Post[] = [
-  {
-    id: "1",
-    title: "5살 아이 그림에서 불안 징후가 보인다고 하는데, 어떻게 해야 할까요?",
-    content: "아이가 최근에 그린 그림을 분석해보니 불안 징후가 나온다고 해서 걱정이 됩니다. 비슷한 경험 있으신 분 계신가요?",
-    author: { name: "걱정맘", badge: "활발한 회원" },
-    category: "qna",
-    createdAt: "10분 전",
-    views: 234,
-    likes: 45,
-    comments: 23,
-    isLiked: false,
-    isBookmarked: false,
-    tags: ["불안", "5세", "그림분석"]
-  },
-  {
-    id: "2",
-    title: "[전문가 칼럼] 아이의 그림으로 읽는 마음 - 색상이 말하는 것들",
-    content: "아이들이 사용하는 색상에는 특별한 의미가 담겨 있습니다. 오늘은 색상별로 아이의 심리 상태를 파악하는 방법을 알려드릴게요.",
-    author: { name: "김미영 심리상담사", badge: "전문가" },
-    category: "expert",
-    createdAt: "2시간 전",
-    views: 1523,
-    likes: 312,
-    comments: 45,
-    isLiked: true,
-    isBookmarked: true,
-    tags: ["색상심리", "전문가칼럼", "그림분석"]
-  },
-  {
-    id: "3",
-    title: "상담센터 다녀왔어요! 마음숲 아동심리상담센터 솔직 후기",
-    content: "지난주에 아이랑 같이 상담받고 왔는데요, 생각보다 너무 좋았어서 후기 남겨봅니다.",
-    author: { name: "행복한엄마" },
-    category: "review",
-    createdAt: "5시간 전",
-    views: 567,
-    likes: 89,
-    comments: 34,
-    isLiked: false,
-    isBookmarked: false,
-    tags: ["상담후기", "마음숲", "추천"]
-  },
-  {
-    id: "4",
-    title: "아이가 검은색만 사용해서 그림을 그려요",
-    content: "7살 남자아이인데 요즘 그림 그릴 때 검은색만 사용해요. 다른 색 쓰라고 해도 검은색만 고집하는데 괜찮은 걸까요?",
-    author: { name: "초보맘22" },
-    category: "qna",
-    createdAt: "어제",
-    views: 892,
-    likes: 56,
-    comments: 67,
-    isLiked: false,
-    isBookmarked: true,
-    tags: ["색상", "7세", "남아"]
-  },
-  {
-    id: "5",
-    title: "집에서 할 수 있는 정서 발달 놀이 5가지 공유해요!",
-    content: "심리상담사님께 배운 집에서 쉽게 할 수 있는 정서 발달 놀이들 공유합니다. 우리 아이한테 효과 좋았어요!",
-    author: { name: "놀이대장맘", badge: "인기 작성자" },
-    category: "tips",
-    createdAt: "3일 전",
-    views: 2341,
-    likes: 456,
-    comments: 78,
-    isLiked: true,
-    isBookmarked: false,
-    tags: ["정서발달", "집놀이", "꿀팁"]
+interface Comment {
+  id: number
+  postId: number
+  userId: number
+  parentId?: number | null
+  content: string
+  createdAt: string
+  author: {
+    id?: number | null
+    name: string
+    badge?: string
   }
-]
+}
 
 const mockExperts = [
   { id: "1", name: "김미영", title: "아동심리상담사", answerCount: 234, color: "bg-teal-500" },
@@ -110,17 +55,108 @@ const categoryLabels: Record<string, string> = {
   expert: "전문가 칼럼"
 }
 
-export default async function CommunityPostPage({
-  params
-}: {
-  params: Promise<{ id: string }>
-}) {
-  const { id } = await params
-  const post = mockPosts.find(item => item.id === id)
+export default function CommunityPostPage() {
+  const params = useParams<{ id: string }>()
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
+  const [post, setPost] = useState<Post | null>(null)
+  const [comments, setComments] = useState<Comment[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [errorMessage, setErrorMessage] = useState("")
 
-  if (!post) {
-    notFound()
+  const getAuthToken = () => {
+    if (typeof window === "undefined") return null
+    return (
+      localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token")
+    )
   }
+
+  const formatDateLabel = (value: string) => {
+    const parsed = new Date(value)
+    if (Number.isNaN(parsed.getTime())) return value
+    return parsed.toLocaleString("ko-KR", {
+      month: "numeric",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+  }
+
+  useEffect(() => {
+    if (!params?.id) return
+    const controller = new AbortController()
+    const token = getAuthToken()
+    setIsLoading(true)
+    setErrorMessage("")
+
+    const loadPost = fetch(`${apiBaseUrl}/community/posts/${params.id}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      signal: controller.signal,
+    })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error("게시글을 불러오지 못했습니다.")
+        }
+        return response.json()
+      })
+      .then(data => {
+        setPost({
+          id: data.id,
+          title: data.title,
+          content: data.content,
+          author: {
+            id: data.author?.id ?? null,
+            name: data.author?.name ?? "익명",
+            badge: data.author?.badge ?? undefined,
+          },
+          category: data.category,
+          createdAt: formatDateLabel(data.created_at),
+          views: data.view_count,
+          likes: data.like_count,
+          comments: data.comment_count,
+          isLiked: data.is_liked,
+          isBookmarked: data.is_bookmarked,
+          tags: data.tags ?? [],
+        })
+      })
+
+    const loadComments = fetch(
+      `${apiBaseUrl}/community/posts/${params.id}/comments`,
+      { signal: controller.signal }
+    )
+      .then(response => {
+        if (!response.ok) {
+          throw new Error("댓글을 불러오지 못했습니다.")
+        }
+        return response.json()
+      })
+      .then(data => {
+        const mapped = (data ?? []).map((item: any) => ({
+          id: item.id,
+          postId: item.post_id,
+          userId: item.user_id,
+          parentId: item.parent_id,
+          content: item.content,
+          createdAt: formatDateLabel(item.created_at),
+          author: {
+            id: item.author?.id ?? null,
+            name: item.author?.name ?? "익명",
+            badge: item.author?.badge ?? undefined,
+          },
+        }))
+        setComments(mapped)
+      })
+
+    Promise.all([loadPost, loadComments])
+      .catch(error => {
+        if (error instanceof DOMException && error.name === "AbortError") return
+        setErrorMessage(
+          error instanceof Error ? error.message : "데이터를 불러오지 못했습니다."
+        )
+      })
+      .finally(() => setIsLoading(false))
+
+    return () => controller.abort()
+  }, [apiBaseUrl, params?.id])
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
@@ -128,7 +164,19 @@ export default async function CommunityPostPage({
 
       <main className="flex-1">
         <div className="container mx-auto px-4 lg:px-8 py-10">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-10">
+          {isLoading && (
+            <div className="py-16 text-center text-slate-400">
+              게시글을 불러오는 중입니다...
+            </div>
+          )}
+          {!isLoading && errorMessage && (
+            <div className="py-16 text-center text-red-500">{errorMessage}</div>
+          )}
+          {!isLoading && !errorMessage && !post && (
+            <div className="py-16 text-center text-slate-400">게시글이 없습니다</div>
+          )}
+          {post && (
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-10">
             <div className="lg:col-span-3">
               <div className="mb-6">
                 <nav className="text-xs text-slate-400">
@@ -157,15 +205,7 @@ export default async function CommunityPostPage({
                   <span className="text-xs text-primary font-medium">
                     {categoryLabels[post.category]}
                   </span>
-                  {post.author.badge && (
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${
-                      post.author.badge === "전문가" 
-                        ? "bg-primary/10 text-primary" 
-                        : "bg-slate-100 text-slate-600"
-                    }`}>
-                      {post.author.badge}
-                    </span>
-                  )}
+                  {post.author.badge && null}
                 </div>
 
                 <h1 className="text-3xl font-semibold text-slate-900 leading-snug mb-4">
@@ -223,6 +263,46 @@ export default async function CommunityPostPage({
                   ))}
                 </div>
               </article>
+
+              {/* Comments */}
+              <section className="border-t border-slate-100 pt-8">
+                <h3 className="text-sm font-semibold text-slate-800 mb-4">
+                  댓글 {comments.length}
+                </h3>
+                {comments.length === 0 && (
+                  <p className="text-sm text-slate-400">아직 댓글이 없습니다.</p>
+                )}
+                <div className="space-y-4">
+                  {comments.map(comment => (
+                    <div
+                      key={comment.id}
+                      className={`rounded-xl border border-slate-100 p-4 ${
+                        comment.parentId ? "ml-8 bg-slate-50/60" : "bg-white"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between text-xs text-slate-400">
+                        <div className="flex items-center gap-2">
+                          <Avatar className="h-6 w-6">
+                            <AvatarFallback className={`text-white text-[10px] ${
+                              comment.author.badge === "전문가" ? "bg-primary" : "bg-slate-400"
+                            }`}>
+                              {comment.author.name[0]}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="text-slate-600">{comment.author.name}</span>
+                          {comment.author.badge && (
+                            <span className="text-primary">{comment.author.badge}</span>
+                          )}
+                        </div>
+                        <span>{comment.createdAt}</span>
+                      </div>
+                      <p className="mt-2 text-sm text-slate-700 whitespace-pre-line">
+                        {comment.content}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </section>
             </div>
 
             <div className="space-y-8">
@@ -257,7 +337,8 @@ export default async function CommunityPostPage({
                 </button>
               </div>
             </div>
-          </div>
+            </div>
+          )}
         </div>
       </main>
 

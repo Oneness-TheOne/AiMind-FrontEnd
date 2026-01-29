@@ -16,6 +16,7 @@ export default function LoginPage() {
   const router = useRouter()
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -25,10 +26,31 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-    // Simulate login - will be replaced with actual auth
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    setIsLoading(false)
-    router.push("/mypage")
+    try {
+      const response = await fetch(`${apiBaseUrl}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+        }),
+      })
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        const message = errorData?.detail?.message || "로그인에 실패했습니다."
+        throw new Error(message)
+      }
+      const data = await response.json()
+      const storage = formData.rememberMe ? localStorage : sessionStorage
+      storage.setItem("auth_token", data.token)
+      storage.setItem("auth_email", formData.email)
+      router.push("/mypage")
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "로그인에 실패했습니다."
+      alert(message)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -48,18 +70,11 @@ export default function LoginPage() {
           <div className="text-center space-y-2">
             <Link href="/" className="inline-flex items-center gap-2.5 justify-center">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  className="h-6 w-6 text-primary-foreground"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" />
-                  <path d="M9 9h.01" />
-                  <path d="M15 9h.01" />
-                  <path d="M8 13c1.5 2 3 3 4 3s2.5-1 4-3" />
-                </svg>
+                <img
+                  src="/moms-smile.svg"
+                  alt="아이마음"
+                  className="h-6 w-6"
+                />
               </div>
               <span className="text-2xl font-bold text-foreground">아이마음</span>
             </Link>

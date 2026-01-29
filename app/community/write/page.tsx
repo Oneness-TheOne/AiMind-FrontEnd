@@ -38,6 +38,7 @@ const suggestedTags = ["그림분석", "발달검사", "미술치료", "놀이�
 
 export default function CommunityWritePage() {
   const router = useRouter()
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
   const [category, setCategory] = useState("")
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
@@ -78,9 +79,45 @@ export default function CommunityWritePage() {
     setImages(images.filter((_, i) => i !== index))
   }
 
-  const handleSubmit = () => {
-    // In a real app, this would submit to the backend
-    router.push("/community")
+  const getAuthToken = () => {
+    if (typeof window === "undefined") return null
+    return (
+      localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token")
+    )
+  }
+
+  const handleSubmit = async () => {
+    const token = getAuthToken()
+    if (!token) {
+      alert("로그인이 필요합니다.")
+      router.push("/login")
+      return
+    }
+    try {
+      const response = await fetch(`${apiBaseUrl}/community/posts`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          category_slug: category,
+          title,
+          content,
+          tags,
+          images,
+        }),
+      })
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        const message = errorData?.detail?.message || "게시글 등록에 실패했습니다."
+        throw new Error(message)
+      }
+      router.push("/community")
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "게시글 등록에 실패했습니다."
+      alert(message)
+    }
   }
 
   const isValid = category && title.length >= 5 && content.length >= 10

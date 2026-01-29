@@ -24,10 +24,11 @@ import Link from "next/link"
 import { Pagination } from "@/components/ui/pagination-simple"
 
 interface Post {
-  id: string
+  id: number
   title: string
   content: string
   author: {
+    id?: number | null
     name: string
     badge?: string
   }
@@ -41,86 +42,13 @@ interface Post {
   tags: string[]
 }
 
-const categories = [
+const defaultCategories = [
   { id: "all", label: "전체" },
   { id: "free", label: "자유게시판" },
   { id: "tips", label: "육아 꿀팁" },
   { id: "qna", label: "Q&A" },
   { id: "review", label: "상담 후기" },
   { id: "expert", label: "전문가 칼럼" },
-]
-
-const mockPosts: Post[] = [
-  {
-    id: "1",
-    title: "5살 아이 그림에서 불안 징후가 보인다고 하는데, 어떻게 해야 할까요?",
-    content: "아이가 최근에 그린 그림을 분석해보니 불안 징후가 나온다고 해서 걱정이 됩니다. 비슷한 경험 있으신 분 계신가요?",
-    author: { name: "걱정맘", badge: "활발한 회원" },
-    category: "qna",
-    createdAt: "10분 전",
-    views: 234,
-    likes: 45,
-    comments: 23,
-    isLiked: false,
-    isBookmarked: false,
-    tags: ["불안", "5세", "그림분석"]
-  },
-  {
-    id: "2",
-    title: "[전문가 칼럼] 아이의 그림으로 읽는 마음 - 색상이 말하는 것들",
-    content: "아이들이 사용하는 색상에는 특별한 의미가 담겨 있습니다. 오늘은 색상별로 아이의 심리 상태를 파악하는 방법을 알려드릴게요.",
-    author: { name: "김미영 심리상담사", badge: "전문가" },
-    category: "expert",
-    createdAt: "2시간 전",
-    views: 1523,
-    likes: 312,
-    comments: 45,
-    isLiked: true,
-    isBookmarked: true,
-    tags: ["색상심리", "전문가칼럼", "그림분석"]
-  },
-  {
-    id: "3",
-    title: "상담센터 다녀왔어요! 마음숲 아동심리상담센터 솔직 후기",
-    content: "지난주에 아이랑 같이 상담받고 왔는데요, 생각보다 너무 좋았어서 후기 남겨봅니다.",
-    author: { name: "행복한엄마" },
-    category: "review",
-    createdAt: "5시간 전",
-    views: 567,
-    likes: 89,
-    comments: 34,
-    isLiked: false,
-    isBookmarked: false,
-    tags: ["상담후기", "마음숲", "추천"]
-  },
-  {
-    id: "4",
-    title: "아이가 검은색만 사용해서 그림을 그려요",
-    content: "7살 남자아이인데 요즘 그림 그릴 때 검은색만 사용해요. 다른 색 쓰라고 해도 검은색만 고집하는데 괜찮은 걸까요?",
-    author: { name: "초보맘22" },
-    category: "qna",
-    createdAt: "어제",
-    views: 892,
-    likes: 56,
-    comments: 67,
-    isLiked: false,
-    isBookmarked: true,
-    tags: ["색상", "7세", "남아"]
-  },
-  {
-    id: "5",
-    title: "집에서 할 수 있는 정서 발달 놀이 5가지 공유해요!",
-    content: "심리상담사님께 배운 집에서 쉽게 할 수 있는 정서 발달 놀이들 공유합니다. 우리 아이한테 효과 좋았어요!",
-    author: { name: "놀이대장맘", badge: "인기 작성자" },
-    category: "tips",
-    createdAt: "3일 전",
-    views: 2341,
-    likes: 456,
-    comments: 78,
-    isLiked: true,
-    isBookmarked: false,
-    tags: ["정서발달", "집놀이", "꿀팁"]
-  }
 ]
 
 const mockExperts = [
@@ -159,28 +87,26 @@ function useScrollAnimation() {
 const POSTS_PER_PAGE = 5
 
 export default function CommunityPage() {
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [searchQuery, setSearchQuery] = useState("")
-  const [posts, setPosts] = useState(mockPosts)
+  const [posts, setPosts] = useState<Post[]>([])
+  const [categories, setCategories] = useState(defaultCategories)
   const [sortBy, setSortBy] = useState<"popular" | "latest">("popular")
   const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [isLoading, setIsLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState("")
+  const [stats, setStats] = useState({
+    users: 0,
+    posts: 0,
+    comments: 0,
+    experts: 0,
+  })
 
   const heroAnim = useScrollAnimation()
   const searchAnim = useScrollAnimation()
   const contentAnim = useScrollAnimation()
-
-  const filteredPosts = posts.filter(post => {
-    const matchesCategory = selectedCategory === "all" || post.category === selectedCategory
-    const matchesSearch = post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      post.content.toLowerCase().includes(searchQuery.toLowerCase())
-    return matchesCategory && matchesSearch
-  })
-
-  const totalPages = Math.ceil(filteredPosts.length / POSTS_PER_PAGE)
-  const paginatedPosts = filteredPosts.slice(
-    (currentPage - 1) * POSTS_PER_PAGE,
-    currentPage * POSTS_PER_PAGE
-  )
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page)
@@ -192,26 +118,182 @@ export default function CommunityPage() {
     setCurrentPage(1)
   }, [selectedCategory, searchQuery])
 
-  const toggleLike = (postId: string) => {
-    setPosts(prev => prev.map(post => {
-      if (post.id === postId) {
-        return {
-          ...post,
-          isLiked: !post.isLiked,
-          likes: post.isLiked ? post.likes - 1 : post.likes + 1
-        }
-      }
-      return post
-    }))
+  const getAuthToken = () => {
+    if (typeof window === "undefined") return null
+    return (
+      localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token")
+    )
   }
 
-  const toggleBookmark = (postId: string) => {
-    setPosts(prev => prev.map(post => {
-      if (post.id === postId) {
-        return { ...post, isBookmarked: !post.isBookmarked }
+  const formatDateLabel = (value: string) => {
+    const parsed = new Date(value)
+    if (Number.isNaN(parsed.getTime())) return value
+    return parsed.toLocaleString("ko-KR", {
+      month: "numeric",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+  }
+
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch(`${apiBaseUrl}/community/categories`)
+      if (!response.ok) return
+      const data = await response.json()
+      const mapped = [
+        { id: "all", label: "전체" },
+        ...data.map((item: { slug: string; label: string }) => ({
+          id: item.slug,
+          label: item.label,
+        })),
+      ]
+      setCategories(mapped)
+    } catch {
+      setCategories(defaultCategories)
+    }
+  }
+
+  const fetchStats = async () => {
+    try {
+      const response = await fetch(`${apiBaseUrl}/community/stats`)
+      if (!response.ok) return
+      const data = await response.json()
+      setStats({
+        users: data.users ?? 0,
+        posts: data.posts ?? 0,
+        comments: data.comments ?? 0,
+        experts: data.experts ?? 0,
+      })
+    } catch {
+      setStats({
+        users: 0,
+        posts: 0,
+        comments: 0,
+        experts: 0,
+      })
+    }
+  }
+
+  const fetchPosts = async (signal?: AbortSignal) => {
+    setIsLoading(true)
+    setErrorMessage("")
+    try {
+      const params = new URLSearchParams({
+        category: selectedCategory,
+        search: searchQuery,
+        sort: sortBy,
+        page: String(currentPage),
+        page_size: String(POSTS_PER_PAGE),
+      })
+      const token = getAuthToken()
+      const response = await fetch(
+        `${apiBaseUrl}/community/posts?${params.toString()}`,
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          signal,
+        }
+      )
+      if (!response.ok) {
+        throw new Error("게시글을 불러오지 못했습니다.")
       }
-      return post
-    }))
+      const data = await response.json()
+      const mapped = (data.items ?? []).map((item: any) => ({
+        id: item.id,
+        title: item.title,
+        content: item.content,
+        author: {
+          id: item.author?.id ?? null,
+          name: item.author?.name ?? "익명",
+          badge: item.author?.badge ?? undefined,
+        },
+        category: item.category,
+        createdAt: formatDateLabel(item.created_at),
+        views: item.view_count,
+        likes: item.like_count,
+        comments: item.comment_count,
+        isLiked: item.is_liked,
+        isBookmarked: item.is_bookmarked,
+        tags: item.tags ?? [],
+      }))
+      setPosts(mapped)
+      setTotalPages(Math.max(1, Math.ceil((data.total ?? 0) / POSTS_PER_PAGE)))
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return
+      setErrorMessage(
+        error instanceof Error ? error.message : "게시글을 불러오지 못했습니다."
+      )
+      setPosts([])
+      setTotalPages(1)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchCategories()
+    fetchStats()
+  }, [])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => {
+      fetchPosts(controller.signal)
+    }, 200)
+    return () => {
+      controller.abort()
+      window.clearTimeout(timer)
+    }
+  }, [selectedCategory, searchQuery, sortBy, currentPage])
+
+  const toggleLike = (postId: number) => {
+    const token = getAuthToken()
+    if (!token) {
+      alert("로그인이 필요합니다.")
+      return
+    }
+    fetch(`${apiBaseUrl}/community/posts/${postId}/like`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(response => response.json())
+      .then(data => {
+        setPosts(prev =>
+          prev.map(post =>
+            post.id === postId
+              ? { ...post, isLiked: data.is_liked, likes: data.like_count }
+              : post
+          )
+        )
+      })
+      .catch(() => {
+        alert("좋아요 처리에 실패했습니다.")
+      })
+  }
+
+  const toggleBookmark = (postId: number) => {
+    const token = getAuthToken()
+    if (!token) {
+      alert("로그인이 필요합니다.")
+      return
+    }
+    fetch(`${apiBaseUrl}/community/posts/${postId}/bookmark`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(response => response.json())
+      .then(data => {
+        setPosts(prev =>
+          prev.map(post =>
+            post.id === postId
+              ? { ...post, isBookmarked: data.is_bookmarked }
+              : post
+          )
+        )
+      })
+      .catch(() => {
+        alert("북마크 처리에 실패했습니다.")
+      })
   }
 
   const categoryLabels: Record<string, string> = {
@@ -276,19 +358,19 @@ export default function CommunityPage() {
           <div className="container mx-auto px-4 lg:px-8 py-6">
             <div className="flex justify-center gap-12 md:gap-20">
               <div className="text-center">
-                <p className="text-2xl font-bold text-slate-800">12,345</p>
+                <p className="text-2xl font-bold text-slate-800">{stats.users.toLocaleString()}</p>
                 <p className="text-xs text-slate-500 mt-1">회원</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-slate-800">5,678</p>
+                <p className="text-2xl font-bold text-slate-800">{stats.posts.toLocaleString()}</p>
                 <p className="text-xs text-slate-500 mt-1">게시글</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-slate-800">23,456</p>
+                <p className="text-2xl font-bold text-slate-800">{stats.comments.toLocaleString()}</p>
                 <p className="text-xs text-slate-500 mt-1">댓글</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-primary">89</p>
+                <p className="text-2xl font-bold text-primary">{stats.experts.toLocaleString()}</p>
                 <p className="text-xs text-slate-500 mt-1">전문가</p>
               </div>
             </div>
@@ -351,7 +433,15 @@ export default function CommunityPage() {
 
               {/* Posts List */}
               <div className="divide-y divide-slate-100">
-                {paginatedPosts.map((post, index) => (
+                {isLoading && (
+                  <div className="py-10 text-center text-slate-400">
+                    게시글을 불러오는 중입니다...
+                  </div>
+                )}
+                {!isLoading && errorMessage && (
+                  <div className="py-10 text-center text-red-500">{errorMessage}</div>
+                )}
+                {!isLoading && !errorMessage && posts.map((post, index) => (
                   <article 
                     key={post.id} 
                     className="py-6 first:pt-0 transition-all duration-300 hover:bg-slate-50/50 -mx-4 px-4 rounded-lg"
@@ -371,15 +461,7 @@ export default function CommunityPage() {
                           <span className="text-xs text-primary font-medium">
                             {categoryLabels[post.category]}
                           </span>
-                          {post.author.badge && (
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${
-                              post.author.badge === "전문가" 
-                                ? "bg-primary/10 text-primary" 
-                                : "bg-slate-100 text-slate-600"
-                            }`}>
-                              {post.author.badge}
-                            </span>
-                          )}
+                          {post.author.badge && null}
                         </div>
                         
                         <Link href={`/community/${post.id}`}>
@@ -433,14 +515,14 @@ export default function CommunityPage() {
                 ))}
               </div>
 
-              {paginatedPosts.length === 0 && (
+              {!isLoading && !errorMessage && posts.length === 0 && (
                 <div className="text-center py-16">
                   <p className="text-slate-400">검색 결과가 없습니다</p>
                 </div>
               )}
 
               {/* Pagination */}
-              {filteredPosts.length > 0 && (
+              {totalPages > 1 && (
                 <Pagination
                   currentPage={currentPage}
                   totalPages={totalPages}
