@@ -154,6 +154,30 @@ export default function MyPage() {
   })
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
 
+  const resolveProfileImageUrl = (value?: string | null) => {
+    if (!value || value === "base") return null
+    const trimmed = value.trim()
+    if (
+      trimmed.startsWith("data:") ||
+      trimmed.startsWith("blob:") ||
+      trimmed.startsWith("http://") ||
+      trimmed.startsWith("https://")
+    ) {
+      return trimmed
+    }
+    if (/^[a-z0-9.-]+\.[a-z]{2,}(\/|$)/i.test(trimmed)) {
+      return `https://${trimmed}`
+    }
+    if (trimmed.startsWith("/")) {
+      const base =
+        apiBaseUrl || (typeof window !== "undefined" ? window.location.origin : "")
+      return base ? new URL(trimmed, base).toString() : trimmed
+    }
+    return trimmed
+  }
+
+  const profileImageSrc = resolveProfileImageUrl(profile.profile_image_url)
+
   const totalHistoryPages = Math.ceil(mockAnalysisHistory.length / ITEMS_PER_PAGE)
   const paginatedHistory = mockAnalysisHistory.slice(
     (historyPage - 1) * ITEMS_PER_PAGE,
@@ -206,8 +230,8 @@ export default function MyPage() {
               }`}
             >
               <Avatar className="h-24 w-24 border-4 border-white/30">
-                {profile.profile_image_url !== "base" && (
-                  <AvatarImage src={profile.profile_image_url} alt={profile.name || "프로필"} />
+                {profileImageSrc && (
+                  <AvatarImage src={profileImageSrc} alt={profile.name || "프로필"} />
                 )}
                 <AvatarFallback className="text-2xl bg-white text-teal-600 font-bold">
                   {(profile.name || " ").trim().charAt(0)}
@@ -223,7 +247,16 @@ export default function MyPage() {
                 <div className="flex items-center justify-center md:justify-start gap-4 mt-3 text-sm text-teal-100">
                   <span className="flex items-center gap-1.5">
                     <Calendar className="h-4 w-4" />
-                    2023.06.15 가입
+                    <span className="flex items-center gap-1.5">
+                      {profileImageSrc && (
+                        <img
+                          src={profileImageSrc}
+                          alt={profile.name || "프로필"}
+                          className="h-4 w-4 rounded-full object-cover border border-white/30"
+                        />
+                      )}
+                      2023.06.15 가입
+                    </span>
                   </span>
                   <span className="flex items-center gap-1.5">
                     <FileText className="h-4 w-4" />

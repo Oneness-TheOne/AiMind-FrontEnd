@@ -5,7 +5,7 @@ import { useParams } from "next/navigation"
 import { useEffect, useState } from "react"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Award, Bookmark, Eye, Heart, MessageCircle, ChevronRight } from "lucide-react"
 
 interface Post {
@@ -16,6 +16,7 @@ interface Post {
     id?: number | null
     name: string
     badge?: string
+    profileImageUrl?: string
   }
   category: string
   createdAt: string
@@ -38,6 +39,7 @@ interface Comment {
     id?: number | null
     name: string
     badge?: string
+    profileImageUrl?: string
   }
 }
 
@@ -62,6 +64,28 @@ export default function CommunityPostPage() {
   const [comments, setComments] = useState<Comment[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState("")
+
+  const resolveProfileImageUrl = (value?: string | null) => {
+    if (!value || value === "base") return null
+    const trimmed = value.trim()
+    if (
+      trimmed.startsWith("data:") ||
+      trimmed.startsWith("blob:") ||
+      trimmed.startsWith("http://") ||
+      trimmed.startsWith("https://")
+    ) {
+      return trimmed
+    }
+    if (/^[a-z0-9.-]+\.[a-z]{2,}(\/|$)/i.test(trimmed)) {
+      return `https://${trimmed}`
+    }
+    if (trimmed.startsWith("/")) {
+      const base =
+        apiBaseUrl || (typeof window !== "undefined" ? window.location.origin : "")
+      return base ? new URL(trimmed, base).toString() : trimmed
+    }
+    return trimmed
+  }
 
   const getAuthToken = () => {
     if (typeof window === "undefined") return null
@@ -107,6 +131,7 @@ export default function CommunityPostPage() {
             id: data.author?.id ?? null,
             name: data.author?.name ?? "익명",
             badge: data.author?.badge ?? undefined,
+            profileImageUrl: data.author?.profile_image_url ?? undefined,
           },
           category: data.category,
           createdAt: formatDateLabel(data.created_at),
@@ -141,6 +166,7 @@ export default function CommunityPostPage() {
             id: item.author?.id ?? null,
             name: item.author?.name ?? "익명",
             badge: item.author?.badge ?? undefined,
+            profileImageUrl: item.author?.profile_image_url ?? undefined,
           },
         }))
         setComments(mapped)
@@ -215,6 +241,12 @@ export default function CommunityPostPage() {
                 <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400 pb-6 border-b border-slate-100">
                   <div className="flex items-center gap-2">
                     <Avatar className="h-7 w-7">
+                      {resolveProfileImageUrl(post.author.profileImageUrl) && (
+                        <AvatarImage
+                          src={resolveProfileImageUrl(post.author.profileImageUrl) as string}
+                          alt={post.author.name}
+                        />
+                      )}
                       <AvatarFallback className={`text-white text-xs ${
                         post.author.badge === "전문가" ? "bg-primary" : "bg-slate-400"
                       }`}>
@@ -283,6 +315,12 @@ export default function CommunityPostPage() {
                       <div className="flex items-center justify-between text-xs text-slate-400">
                         <div className="flex items-center gap-2">
                           <Avatar className="h-6 w-6">
+                            {resolveProfileImageUrl(comment.author.profileImageUrl) && (
+                              <AvatarImage
+                                src={resolveProfileImageUrl(comment.author.profileImageUrl) as string}
+                                alt={comment.author.name}
+                              />
+                            )}
                             <AvatarFallback className={`text-white text-[10px] ${
                               comment.author.badge === "전문가" ? "bg-primary" : "bg-slate-400"
                             }`}>

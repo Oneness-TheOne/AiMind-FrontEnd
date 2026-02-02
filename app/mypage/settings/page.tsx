@@ -1,14 +1,17 @@
 "use client"
 
-import { useState } from "react"
+import React from "react"
+
+import { useEffect, useRef, useState } from "react"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { 
   ArrowLeft,
   User,
@@ -17,7 +20,9 @@ import {
   CreditCard,
   LogOut,
   Trash2,
-  ChevronRight
+  ChevronRight,
+  Camera,
+  Loader2
 } from "lucide-react"
 import Link from "next/link"
 import {
@@ -33,12 +38,125 @@ import {
 } from "@/components/ui/alert-dialog"
 
 export default function SettingsPage() {
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
   const [notifications, setNotifications] = useState({
     email: true,
     push: true,
     marketing: false,
     community: true
   })
+  const [profileImageUrl, setProfileImageUrl] = useState("")
+  const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null)
+  const [profileImageFile, setProfileImageFile] = useState<File | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveErrorMessage, setSaveErrorMessage] = useState("")
+  const [saveSuccess, setSaveSuccess] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const token =
+      localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token")
+    if (!token) {
+      return
+    }
+    const fetchProfile = async () => {
+      try {
+        const response = await fetch(`${apiBaseUrl}/auth/me`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!response.ok) {
+          return
+        }
+        const data = await response.json()
+        const imageUrl = data.profile_image_url ?? "base"
+        if (imageUrl === "base") {
+          setProfileImageUrl("")
+          setProfileImagePreview(null)
+        } else {
+          setProfileImageUrl(imageUrl)
+          setProfileImagePreview(imageUrl)
+        }
+      } catch {
+        // ignore profile fetch errors for now
+      }
+    }
+    fetchProfile()
+  }, [apiBaseUrl])
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setIsUploading(true)
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        const dataUrl = reader.result as string
+        setProfileImageFile(file)
+        setProfileImagePreview(dataUrl)
+        setIsUploading(false)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const handleRemoveImage = () => {
+    setProfileImageFile(null)
+    setProfileImagePreview(profileImageUrl ? profileImageUrl : null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
+  }
+
+  const handleSaveProfile = async () => {
+    setIsSaving(true)
+    setSaveErrorMessage("")
+    setSaveSuccess(false)
+    const token =
+      localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token")
+    if (!token) {
+      setSaveErrorMessage("로그인이 필요합니다.")
+      setIsSaving(false)
+      return
+    }
+    if (!profileImageFile) {
+      setSaveErrorMessage("변경할 사진을 선택해 주세요.")
+      setIsSaving(false)
+      return
+    }
+    try {
+      const formData = new FormData()
+      formData.append("image", profileImageFile)
+      const response = await fetch(`${apiBaseUrl}/users/me/profile-image`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      })
+      if (!response.ok) {
+        throw new Error("profile update failed")
+      }
+      try {
+        const data = await response.json()
+        if (data?.profile_image_url) {
+          setProfileImageUrl(data.profile_image_url)
+          setProfileImagePreview(data.profile_image_url)
+        }
+      } catch {
+        // ignore non-json responses
+      }
+      setProfileImageFile(null)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
+      setSaveSuccess(true)
+    } catch {
+      setSaveErrorMessage("프로필 사진 저장에 실패했습니다.")
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -63,7 +181,62 @@ export default function SettingsPage() {
                   프로필 설정
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-6">
+                {/* Profile Image */}
+                <div className="space-y-3">
+                  <Label>프로필 사진</Label>
+                  <div className="flex items-center gap-4">
+                    <div className="relative">
+                      <Avatar className="h-20 w-20 border-2 border-slate-200">
+                        <AvatarImage src={profileImagePreview || undefined} alt="프로필" />
+                        <AvatarFallback className="bg-primary/10 text-primary text-xl">
+                          김
+                        </AvatarFallback>
+                      </Avatar>
+                      {isUploading && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full">
+                          <Loader2 className="h-6 w-6 text-white animate-spin" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                        id="profile-upload"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2 bg-transparent"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploading}
+                      >
+                        <Camera className="h-4 w-4" />
+                        사진 변경
+                      </Button>
+                      {profileImagePreview && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={handleRemoveImage}
+                        >
+                          사진 삭제
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    사진 변경 후 저장하면 프로필이 업데이트됩니다.
+                  </p>
+                </div>
+
+                <Separator />
+
                 <div className="space-y-2">
                   <Label htmlFor="name">이름</Label>
                   <Input id="name" defaultValue="김미래" />
@@ -76,7 +249,22 @@ export default function SettingsPage() {
                   <Label htmlFor="phone">연락처</Label>
                   <Input id="phone" type="tel" defaultValue="010-1234-5678" />
                 </div>
-                <Button className="mt-2">변경사항 저장</Button>
+                <Button className="mt-2" onClick={handleSaveProfile} disabled={isSaving}>
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      저장 중...
+                    </>
+                  ) : (
+                    "변경사항 저장"
+                  )}
+                </Button>
+                {saveSuccess && (
+                  <p className="text-sm text-emerald-600">프로필 사진이 저장되었습니다.</p>
+                )}
+                {saveErrorMessage && (
+                  <p className="text-sm text-destructive">{saveErrorMessage}</p>
+                )}
               </CardContent>
             </Card>
 

@@ -6,7 +6,7 @@ import { Footer } from "@/components/layout/footer"
 import { VideoHero } from "@/components/shared/video-hero"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { 
   Search, 
   MessageCircle, 
@@ -31,6 +31,7 @@ interface Post {
     id?: number | null
     name: string
     badge?: string
+    profileImageUrl?: string
   }
   category: string
   createdAt: string
@@ -103,6 +104,28 @@ export default function CommunityPage() {
     comments: 0,
     experts: 0,
   })
+
+  const resolveProfileImageUrl = (value?: string | null) => {
+    if (!value || value === "base") return null
+    const trimmed = value.trim()
+    if (
+      trimmed.startsWith("data:") ||
+      trimmed.startsWith("blob:") ||
+      trimmed.startsWith("http://") ||
+      trimmed.startsWith("https://")
+    ) {
+      return trimmed
+    }
+    if (/^[a-z0-9.-]+\.[a-z]{2,}(\/|$)/i.test(trimmed)) {
+      return `https://${trimmed}`
+    }
+    if (trimmed.startsWith("/")) {
+      const base =
+        apiBaseUrl || (typeof window !== "undefined" ? window.location.origin : "")
+      return base ? new URL(trimmed, base).toString() : trimmed
+    }
+    return trimmed
+  }
 
   const heroAnim = useScrollAnimation()
   const searchAnim = useScrollAnimation()
@@ -206,6 +229,7 @@ export default function CommunityPage() {
           id: item.author?.id ?? null,
           name: item.author?.name ?? "익명",
           badge: item.author?.badge ?? undefined,
+          profileImageUrl: item.author?.profile_image_url ?? undefined,
         },
         category: item.category,
         createdAt: formatDateLabel(item.created_at),
@@ -449,6 +473,12 @@ export default function CommunityPage() {
                   >
                     <div className="flex items-start gap-4">
                       <Avatar className="h-10 w-10 hidden sm:flex shrink-0">
+                        {resolveProfileImageUrl(post.author.profileImageUrl) && (
+                          <AvatarImage
+                            src={resolveProfileImageUrl(post.author.profileImageUrl) as string}
+                            alt={post.author.name}
+                          />
+                        )}
                         <AvatarFallback className={`text-white text-sm ${
                           post.author.badge === "전문가" ? "bg-primary" : "bg-slate-400"
                         }`}>
