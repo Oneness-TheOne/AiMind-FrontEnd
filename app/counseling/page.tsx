@@ -36,6 +36,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 declare global {
   interface Window {
@@ -43,7 +44,7 @@ declare global {
   }
 }
 
-interface CounselingCenter {
+interface Center {
   id: string
   name: string
   address: string
@@ -58,7 +59,7 @@ interface CounselingCenter {
   isOpen: boolean
 }
 
-const mockCenters: CounselingCenter[] = [
+const counselingCenters: Center[] = [
   {
     id: "1",
     name: "마음숲 아동심리상담센터",
@@ -131,7 +132,80 @@ const mockCenters: CounselingCenter[] = [
   }
 ]
 
-const specialtyOptions = [
+const childCenters: Center[] = [
+  {
+    id: "c1",
+    name: "꿈나무 지역아동센터",
+    address: "서울시 강남구 봉은사로 88",
+    phone: "02-1111-2222",
+    hours: "13:00 - 20:00",
+    rating: 4.7,
+    reviewCount: 52,
+    distance: "0.8km",
+    specialties: ["방과후돌봄", "학습지원", "급식지원"],
+    lat: 37.5112,
+    lng: 127.0582,
+    isOpen: true
+  },
+  {
+    id: "c2",
+    name: "새싹이 아동센터",
+    address: "서울시 강남구 삼성로 215",
+    phone: "02-2222-3333",
+    hours: "12:30 - 19:30",
+    rating: 4.5,
+    reviewCount: 41,
+    distance: "1.4km",
+    specialties: ["방과후돌봄", "문화체험", "정서지원"],
+    lat: 37.5080,
+    lng: 127.0485,
+    isOpen: true
+  },
+  {
+    id: "c3",
+    name: "햇살 아동발달센터",
+    address: "서울시 서초구 반포대로 110",
+    phone: "02-3333-4444",
+    hours: "09:00 - 18:30",
+    rating: 4.8,
+    reviewCount: 68,
+    distance: "2.0km",
+    specialties: ["발달검사", "언어재활", "놀이활동"],
+    lat: 37.5035,
+    lng: 127.0155,
+    isOpen: false
+  },
+  {
+    id: "c4",
+    name: "푸른나무 지역아동센터",
+    address: "서울시 송파구 백제고분로 210",
+    phone: "02-4444-5555",
+    hours: "13:00 - 20:30",
+    rating: 4.6,
+    reviewCount: 37,
+    distance: "3.1km",
+    specialties: ["학습지원", "진로체험", "급식지원"],
+    lat: 37.5070,
+    lng: 127.0980,
+    isOpen: true
+  },
+  {
+    id: "c5",
+    name: "나눔 아동센터",
+    address: "서울시 강동구 천호대로 1045",
+    phone: "02-5555-6666",
+    hours: "12:00 - 19:00",
+    rating: 4.4,
+    reviewCount: 29,
+    distance: "4.2km",
+    specialties: ["방과후돌봄", "정서지원", "문화체험"],
+    lat: 37.5460,
+    lng: 127.1362,
+    isOpen: true
+  }
+]
+
+const counselingSpecialtyOptions = [
   "놀이치료",
   "미술치료",
   "언어치료",
@@ -143,15 +217,37 @@ const specialtyOptions = [
   "인지치료"
 ]
 
+const childCenterSpecialtyOptions = [
+  "방과후돌봄",
+  "학습지원",
+  "급식지원",
+  "정서지원",
+  "문화체험",
+  "진로체험",
+  "발달검사",
+  "언어재활",
+  "놀이활동"
+]
+
 export default function CounselingPage() {
+  const [activeTab, setActiveTab] = useState<"counseling" | "child">("counseling")
   const [viewMode, setViewMode] = useState<"map" | "list">("map")
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedCenter, setSelectedCenter] = useState<CounselingCenter | null>(null)
+  const [selectedCenter, setSelectedCenter] = useState<Center | null>(null)
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([])
   const [sortBy, setSortBy] = useState("distance")
   const [mapLoaded, setMapLoaded] = useState(false)
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<any>(null)
+  const markersRef = useRef<any[]>([])
+
+  const centers = activeTab === "counseling" ? counselingCenters : childCenters
+  const availableSpecialties =
+    activeTab === "counseling"
+      ? counselingSpecialtyOptions
+      : childCenterSpecialtyOptions
+  const centerLabel = activeTab === "counseling" ? "상담소" : "아동센터"
+  const specialtyLabel = activeTab === "counseling" ? "전문 분야" : "프로그램"
 
   useEffect(() => {
     async function loadKakaoMap() {
@@ -189,27 +285,46 @@ export default function CounselingPage() {
       const map = new window.kakao.maps.Map(mapRef.current, options)
       mapInstanceRef.current = map
 
-      // Add markers for each center
-      mockCenters.forEach(center => {
-        const markerPosition = new window.kakao.maps.LatLng(center.lat, center.lng)
-        const marker = new window.kakao.maps.Marker({
-          position: markerPosition
-        })
-        marker.setMap(map)
-
-        // Add click event to marker
-        window.kakao.maps.event.addListener(marker, "click", () => {
-          setSelectedCenter(center)
-        })
-      })
-
       // Add zoom control
       const zoomControl = new window.kakao.maps.ZoomControl()
       map.addControl(zoomControl, window.kakao.maps.ControlPosition.RIGHT)
     }
   }, [mapLoaded])
 
-  const filteredCenters = mockCenters
+  useEffect(() => {
+    if (!mapLoaded || !mapInstanceRef.current) {
+      return
+    }
+
+    markersRef.current.forEach(marker => marker.setMap(null))
+    markersRef.current = []
+
+    centers.forEach(center => {
+      const markerPosition = new window.kakao.maps.LatLng(center.lat, center.lng)
+      const marker = new window.kakao.maps.Marker({
+        position: markerPosition
+      })
+      marker.setMap(mapInstanceRef.current)
+      markersRef.current.push(marker)
+
+      window.kakao.maps.event.addListener(marker, "click", () => {
+        setSelectedCenter(center)
+      })
+    })
+
+    if (centers.length > 0) {
+      mapInstanceRef.current.setCenter(
+        new window.kakao.maps.LatLng(centers[0].lat, centers[0].lng)
+      )
+    }
+  }, [mapLoaded, centers])
+
+  useEffect(() => {
+    setSelectedCenter(null)
+    setSelectedSpecialties([])
+  }, [activeTab])
+
+  const filteredCenters = centers
     .filter(center => {
       const matchesSearch = center.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         center.address.toLowerCase().includes(searchQuery.toLowerCase())
@@ -242,11 +357,21 @@ export default function CounselingPage() {
         {/* Search Header */}
         <div className="bg-card border-b">
           <div className="container mx-auto px-4 py-4">
+            <Tabs
+              value={activeTab}
+              onValueChange={(value) => setActiveTab(value as "counseling" | "child")}
+              className="mb-4"
+            >
+              <TabsList>
+                <TabsTrigger value="counseling">주변 상담소</TabsTrigger>
+                <TabsTrigger value="child">주변 아동센터</TabsTrigger>
+              </TabsList>
+            </Tabs>
             <div className="flex flex-col md:flex-row gap-4">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="상담센터 이름 또는 주소 검색"
+                  placeholder="센터 이름 또는 주소 검색"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
@@ -272,9 +397,9 @@ export default function CounselingPage() {
                     </SheetHeader>
                     <div className="mt-6 space-y-6">
                       <div>
-                        <h4 className="font-medium mb-3">전문 분야</h4>
+                        <h4 className="font-medium mb-3">{specialtyLabel}</h4>
                         <div className="space-y-3">
-                          {specialtyOptions.map(specialty => (
+                          {availableSpecialties.map(specialty => (
                             <div key={specialty} className="flex items-center gap-2">
                               <Checkbox
                                 id={specialty}
@@ -345,7 +470,7 @@ export default function CounselingPage() {
               {/* Sidebar */}
               <div className="space-y-4 max-h-[600px] overflow-y-auto">
                 <p className="text-sm text-muted-foreground">
-                  {filteredCenters.length}개의 상담센터
+                  {filteredCenters.length}개의 {centerLabel}
                 </p>
                 
                 {filteredCenters.map(center => (
@@ -361,7 +486,7 @@ export default function CounselingPage() {
           ) : (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                {filteredCenters.length}개의 상담센터
+                {filteredCenters.length}개의 {centerLabel}
               </p>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -424,7 +549,7 @@ function CenterCard({
   isSelected, 
   onClick 
 }: { 
-  center: CounselingCenter
+  center: Center
   isSelected: boolean
   onClick: () => void 
 }) {
