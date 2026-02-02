@@ -98,34 +98,6 @@ export default function CommunityPage() {
   const [totalPages, setTotalPages] = useState(1)
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState("")
-  const [stats, setStats] = useState({
-    users: 0,
-    posts: 0,
-    comments: 0,
-    experts: 0,
-  })
-
-  const resolveProfileImageUrl = (value?: string | null) => {
-    if (!value || value === "base") return null
-    const trimmed = value.trim()
-    if (
-      trimmed.startsWith("data:") ||
-      trimmed.startsWith("blob:") ||
-      trimmed.startsWith("http://") ||
-      trimmed.startsWith("https://")
-    ) {
-      return trimmed
-    }
-    if (/^[a-z0-9.-]+\.[a-z]{2,}(\/|$)/i.test(trimmed)) {
-      return `https://${trimmed}`
-    }
-    if (trimmed.startsWith("/")) {
-      const base =
-        apiBaseUrl || (typeof window !== "undefined" ? window.location.origin : "")
-      return base ? new URL(trimmed, base).toString() : trimmed
-    }
-    return trimmed
-  }
 
   const heroAnim = useScrollAnimation()
   const searchAnim = useScrollAnimation()
@@ -159,6 +131,26 @@ export default function CommunityPage() {
     })
   }
 
+  const resolveProfileImageUrl = (value?: string | null) => {
+    if (!value || value === "base") return null
+    const trimmed = value.trim()
+    if (
+      trimmed.startsWith("data:") ||
+      trimmed.startsWith("blob:") ||
+      trimmed.startsWith("http://") ||
+      trimmed.startsWith("https://")
+    ) {
+      return trimmed
+    }
+    if (/^[a-z0-9.-]+\.[a-z]{2,}(\/|$)/i.test(trimmed)) {
+      return `https://${trimmed}`
+    }
+    const base =
+      apiBaseUrl || (typeof window !== "undefined" ? window.location.origin : "")
+    const normalizedPath = trimmed.startsWith("/") ? trimmed : `/${trimmed}`
+    return base ? new URL(normalizedPath, base).toString() : normalizedPath
+  }
+
   const fetchCategories = async () => {
     try {
       const response = await fetch(`${apiBaseUrl}/community/categories`)
@@ -174,27 +166,6 @@ export default function CommunityPage() {
       setCategories(mapped)
     } catch {
       setCategories(defaultCategories)
-    }
-  }
-
-  const fetchStats = async () => {
-    try {
-      const response = await fetch(`${apiBaseUrl}/community/stats`)
-      if (!response.ok) return
-      const data = await response.json()
-      setStats({
-        users: data.users ?? 0,
-        posts: data.posts ?? 0,
-        comments: data.comments ?? 0,
-        experts: data.experts ?? 0,
-      })
-    } catch {
-      setStats({
-        users: 0,
-        posts: 0,
-        comments: 0,
-        experts: 0,
-      })
     }
   }
 
@@ -256,7 +227,6 @@ export default function CommunityPage() {
 
   useEffect(() => {
     fetchCategories()
-    fetchStats()
   }, [])
 
   useEffect(() => {
@@ -382,19 +352,19 @@ export default function CommunityPage() {
           <div className="container mx-auto px-4 lg:px-8 py-6">
             <div className="flex justify-center gap-12 md:gap-20">
               <div className="text-center">
-                <p className="text-2xl font-bold text-slate-800">{stats.users.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-slate-800">12,345</p>
                 <p className="text-xs text-slate-500 mt-1">회원</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-slate-800">{stats.posts.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-slate-800">5,678</p>
                 <p className="text-xs text-slate-500 mt-1">게시글</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-slate-800">{stats.comments.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-slate-800">23,456</p>
                 <p className="text-xs text-slate-500 mt-1">댓글</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-primary">{stats.experts.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-primary">89</p>
                 <p className="text-xs text-slate-500 mt-1">전문가</p>
               </div>
             </div>
@@ -472,7 +442,7 @@ export default function CommunityPage() {
                     style={{ animationDelay: `${index * 50}ms` }}
                   >
                     <div className="flex items-start gap-4">
-                      <Avatar className="h-10 w-10 hidden sm:flex shrink-0">
+                      <Avatar className="h-10 w-10 flex shrink-0">
                         {resolveProfileImageUrl(post.author.profileImageUrl) && (
                           <AvatarImage
                             src={resolveProfileImageUrl(post.author.profileImageUrl) as string}

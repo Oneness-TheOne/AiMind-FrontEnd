@@ -6,6 +6,8 @@ import { useEffect, useState } from "react"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Button } from "@/components/ui/button"
+import { Textarea } from "@/components/ui/textarea"
 import { Award, Bookmark, Eye, Heart, MessageCircle, ChevronRight } from "lucide-react"
 
 interface Post {
@@ -62,6 +64,8 @@ export default function CommunityPostPage() {
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
   const [post, setPost] = useState<Post | null>(null)
   const [comments, setComments] = useState<Comment[]>([])
+  const [newComment, setNewComment] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState("")
 
@@ -79,12 +83,10 @@ export default function CommunityPostPage() {
     if (/^[a-z0-9.-]+\.[a-z]{2,}(\/|$)/i.test(trimmed)) {
       return `https://${trimmed}`
     }
-    if (trimmed.startsWith("/")) {
-      const base =
-        apiBaseUrl || (typeof window !== "undefined" ? window.location.origin : "")
-      return base ? new URL(trimmed, base).toString() : trimmed
-    }
-    return trimmed
+    const base =
+      apiBaseUrl || (typeof window !== "undefined" ? window.location.origin : "")
+    const normalizedPath = trimmed.startsWith("/") ? trimmed : `/${trimmed}`
+    return base ? new URL(normalizedPath, base).toString() : normalizedPath
   }
 
   const getAuthToken = () => {
@@ -105,13 +107,62 @@ export default function CommunityPostPage() {
     })
   }
 
+  const handleSubmitComment = async () => {
+    const trimmed = newComment.trim()
+    if (!trimmed) return
+    const token = getAuthToken()
+    if (!token) {
+      alert("로그인이 필요합니다.")
+      return
+    }
+    if (!params?.id) return
+    setIsSubmitting(true)
+    try {
+      const response = await fetch(
+        `${apiBaseUrl}/community/posts/${params.id}/comments`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ content: trimmed }),
+        }
+      )
+      if (!response.ok) {
+        throw new Error("댓글 등록에 실패했습니다.")
+      }
+      const data = await response.json()
+      const mapped: Comment = {
+        id: data.id,
+        postId: data.post_id,
+        userId: data.user_id,
+        parentId: data.parent_id,
+        content: data.content,
+        createdAt: formatDateLabel(data.created_at),
+        author: {
+          id: data.author?.id ?? null,
+          name: data.author?.name ?? "익명",
+          badge: data.author?.badge ?? undefined,
+          profileImageUrl: data.author?.profile_image_url ?? undefined,
+        },
+      }
+      setComments(prev => [...prev, mapped])
+      setPost(prev => (prev ? { ...prev, comments: prev.comments + 1 } : prev))
+      setNewComment("")
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "댓글 등록에 실패했습니다.")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   useEffect(() => {
     if (!params?.id) return
     const controller = new AbortController()
     const token = getAuthToken()
     setIsLoading(true)
     setErrorMessage("")
-
     const loadPost = fetch(`${apiBaseUrl}/community/posts/${params.id}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       signal: controller.signal,
@@ -296,11 +347,27 @@ export default function CommunityPostPage() {
                 </div>
               </article>
 
-              {/* Comments */}
               <section className="border-t border-slate-100 pt-8">
                 <h3 className="text-sm font-semibold text-slate-800 mb-4">
                   댓글 {comments.length}
                 </h3>
+                <div className="mb-6">
+                  <Textarea
+                    value={newComment}
+                    onChange={(event) => setNewComment(event.target.value)}
+                    placeholder="댓글을 입력하세요"
+                    className="min-h-[96px]"
+                  />
+                  <div className="flex justify-end mt-2">
+                    <Button
+                      size="sm"
+                      onClick={handleSubmitComment}
+                      disabled={isSubmitting || newComment.trim().length === 0}
+                    >
+                      {isSubmitting ? "등록 중..." : "댓글 등록"}
+                    </Button>
+                  </div>
+                </div>
                 {comments.length === 0 && (
                   <p className="text-sm text-slate-400">아직 댓글이 없습니다.</p>
                 )}
