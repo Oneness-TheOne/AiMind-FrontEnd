@@ -38,6 +38,8 @@ export function DiaryOCR() {
   const [isDragging, setIsDragging] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
+  const [region, setRegion] = useState("")
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
   const sectionRef = useRef<HTMLDivElement>(null)
   const [savedEntries, setSavedEntries] = useState<DiaryEntry[]>([
     {
@@ -59,6 +61,32 @@ export function DiaryOCR() {
   useEffect(() => {
     setIsVisible(true)
   }, [])
+
+  useEffect(() => {
+    const token =
+      localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token")
+    if (!token) {
+      return
+    }
+    const fetchProfile = async () => {
+      try {
+        const response = await fetch(`${apiBaseUrl}/auth/me`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!response.ok) {
+          return
+        }
+        const data = await response.json()
+        if (data.region && !region) {
+          setRegion(data.region)
+        }
+      } catch {
+        // ignore profile fetch errors for now
+      }
+    }
+    fetchProfile()
+  }, [apiBaseUrl, region])
 
   const totalPages = Math.ceil(savedEntries.length / ENTRIES_PER_PAGE)
   const paginatedEntries = savedEntries.slice(
@@ -134,6 +162,10 @@ export function DiaryOCR() {
 
   const handleSaveEntry = () => {
     if (!uploadedImage || !extractedText) return
+    if (!region) {
+      alert("위치를 선택해주세요.")
+      return
+    }
 
     const newEntry: DiaryEntry = {
       id: Date.now().toString(),
@@ -169,6 +201,51 @@ export function DiaryOCR() {
         <p className="text-sm text-slate-500 mt-1">
           아이의 그림일기 사진을 업로드하면 AI가 손글씨를 텍스트로 변환해드립니다
         </p>
+      </div>
+
+      {/* Location */}
+      <div
+        className={`transition-all duration-700 delay-75 ${
+          isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+        }`}
+      >
+        <div className="space-y-2 max-w-sm">
+          <label htmlFor="region" className="text-sm font-medium text-slate-700">
+            위치
+          </label>
+          <select
+            id="region"
+            value={region}
+            onChange={(e) => setRegion(e.target.value)}
+            className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
+          >
+            <option value="" disabled>
+              위치를 선택하세요
+            </option>
+            {[
+              "서울특별시",
+              "부산광역시",
+              "대구광역시",
+              "인천광역시",
+              "광주광역시",
+              "대전광역시",
+              "울산광역시",
+              "경기도",
+              "강원도",
+              "충청북도",
+              "충청남도",
+              "전라북도",
+              "전라남도",
+              "경상북도",
+              "경상남도",
+              "제주특별자치도",
+            ].map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Upload Area */}

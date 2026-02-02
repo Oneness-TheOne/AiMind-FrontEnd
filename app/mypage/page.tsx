@@ -5,7 +5,7 @@ import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { 
   User,
@@ -147,6 +147,12 @@ export default function MyPage() {
   const [activeTab, setActiveTab] = useState("overview")
   const [isVisible, setIsVisible] = useState(false)
   const [historyPage, setHistoryPage] = useState(1)
+  const [profile, setProfile] = useState({
+    name: "",
+    email: "",
+    profile_image_url: "base",
+  })
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
 
   const totalHistoryPages = Math.ceil(mockAnalysisHistory.length / ITEMS_PER_PAGE)
   const paginatedHistory = mockAnalysisHistory.slice(
@@ -157,6 +163,34 @@ export default function MyPage() {
   useEffect(() => {
     setIsVisible(true)
   }, [])
+
+  useEffect(() => {
+    const token =
+      localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token")
+    if (!token) {
+      return
+    }
+    const fetchProfile = async () => {
+      try {
+        const response = await fetch(`${apiBaseUrl}/auth/me`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!response.ok) {
+          return
+        }
+        const data = await response.json()
+        setProfile({
+          name: data.name ?? "",
+          email: data.email ?? "",
+          profile_image_url: data.profile_image_url ?? "base",
+        })
+      } catch {
+        // ignore profile fetch errors for now
+      }
+    }
+    fetchProfile()
+  }, [apiBaseUrl])
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
@@ -172,17 +206,20 @@ export default function MyPage() {
               }`}
             >
               <Avatar className="h-24 w-24 border-4 border-white/30">
+                {profile.profile_image_url !== "base" && (
+                  <AvatarImage src={profile.profile_image_url} alt={profile.name || "프로필"} />
+                )}
                 <AvatarFallback className="text-2xl bg-white text-teal-600 font-bold">
-                  김
+                  {(profile.name || " ").trim().charAt(0)}
                 </AvatarFallback>
               </Avatar>
               
               <div className="flex-1 text-center md:text-left text-white">
                 <div className="flex items-center justify-center md:justify-start gap-3">
-                  <h1 className="text-2xl font-bold">김미래</h1>
+                  <h1 className="text-2xl font-bold">{profile.name || "회원"}</h1>
                   <Badge className="bg-white/20 text-white hover:bg-white/30 border-0">프리미엄</Badge>
                 </div>
-                <p className="text-teal-100 mt-1">miracle.mom@email.com</p>
+                <p className="text-teal-100 mt-1">{profile.email || "이메일 정보 없음"}</p>
                 <div className="flex items-center justify-center md:justify-start gap-4 mt-3 text-sm text-teal-100">
                   <span className="flex items-center gap-1.5">
                     <Calendar className="h-4 w-4" />
