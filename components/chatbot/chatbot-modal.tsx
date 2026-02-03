@@ -61,6 +61,8 @@ export function ChatbotModal() {
     () => (isAnalysisResult ? analysisResponses : defaultResponses),
     [isAnalysisResult]
   )
+  const chatbotBaseUrl =
+    process.env.NEXT_PUBLIC_AIMODELS_BASE_URL ?? "http://localhost:8080"
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -89,18 +91,37 @@ export function ChatbotModal() {
     setInput("")
     setIsLoading(true)
 
-    // Simulate AI response (replace with actual API call)
-    setTimeout(() => {
+    try {
+      const response = await fetch(`${chatbotBaseUrl}/chatbot`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: userMessage.content }),
+      })
+      if (!response.ok) {
+        throw new Error("챗봇 응답 실패")
+      }
+      const data = (await response.json()) as { answer?: string }
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content:
+          data.answer?.trim() ||
+          "현재 답변을 준비하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+        timestamp: new Date(),
+      }
+
+      setMessages((prev) => [...prev, assistantMessage])
+    } catch {
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content: responses[Math.floor(Math.random() * responses.length)],
         timestamp: new Date(),
       }
-
       setMessages((prev) => [...prev, assistantMessage])
+    } finally {
       setIsLoading(false)
-    }, 1000)
+    }
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -115,32 +136,21 @@ export function ChatbotModal() {
       {/* Floating Button */}
       <button
         onClick={() => setIsOpen(true)}
-        className={`fixed z-50 shadow-lg transition-all duration-300 flex items-center justify-center ${
-          isAnalysisResult
-            ? "bottom-6 left-1/2 h-14 w-[min(640px,calc(100vw-32px))] -translate-x-1/2 rounded-full bg-primary text-white hover:bg-primary/90 px-6"
-            : "bottom-6 right-6 h-14 w-14 rounded-full bg-primary text-white hover:bg-primary/90"
-        } ${isOpen ? "scale-0 opacity-0" : "scale-100 opacity-100"}`}
+        className={`fixed z-50 shadow-lg transition-all duration-300 flex items-center justify-center bottom-6 right-6 h-14 w-14 rounded-full bg-primary text-white hover:bg-primary/90 ${
+          isOpen ? "scale-0 opacity-0" : "scale-100 opacity-100"
+        }`}
         aria-label="채팅 열기"
       >
-        {isAnalysisResult ? (
-          <>
-            <MessageCircle className="h-5 w-5 mr-2" />
-            <span className="text-sm md:text-base font-medium">
-              추가적인 설명이 필요하신가요?
-            </span>
-          </>
-        ) : (
-          <MessageCircle className="h-6 w-6" />
-        )}
+        <MessageCircle className="h-6 w-6" />
       </button>
 
       {/* Chat Modal */}
       <div
-        className={`fixed z-50 w-[360px] max-w-[calc(100vw-48px)] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transition-all duration-300 ${
-          isAnalysisResult
-            ? "bottom-24 left-1/2 -translate-x-1/2"
-            : "bottom-6 right-6"
-        } ${isOpen ? "scale-100 opacity-100 translate-y-0" : "scale-95 opacity-0 translate-y-4 pointer-events-none"}`}
+        className={`fixed z-50 w-[360px] max-w-[calc(100vw-48px)] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transition-all duration-300 bottom-24 right-6 ${
+          isOpen
+            ? "scale-100 opacity-100 translate-y-0"
+            : "scale-95 opacity-0 translate-y-4 pointer-events-none"
+        }`}
       >
         {/* Header */}
         <div className="bg-primary px-4 py-3 flex items-center justify-between">
