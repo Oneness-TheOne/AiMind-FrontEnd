@@ -2,7 +2,8 @@
 
 import React from "react"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useMemo } from "react"
+import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { MessageCircle, X, Send, Bot, User, Minimize2 } from "lucide-react"
@@ -14,21 +15,52 @@ interface Message {
   timestamp: Date
 }
 
-const initialMessages: Message[] = [
-  {
-    id: "1",
-    role: "assistant",
-    content: "안녕하세요! 아이마음 상담 도우미입니다. 아이의 그림 심리 분석이나 서비스 이용에 대해 궁금한 점이 있으시면 편하게 물어보세요.",
-    timestamp: new Date(),
-  },
+const defaultWelcomeMessage: Message = {
+  id: "1",
+  role: "assistant",
+  content:
+    "안녕하세요! 아이마음 상담 도우미입니다. 아이의 그림 심리 분석이나 서비스 이용에 대해 궁금한 점이 있으시면 편하게 물어보세요.",
+  timestamp: new Date(),
+}
+
+const analysisWelcomeMessage: Message = {
+  id: "1",
+  role: "assistant",
+  content:
+    "해석 결과에 대해 추가 설명이 필요하시면 말씀해 주세요. 종합 점수, 발달 단계, 감정 해석 중 궁금한 항목을 알려주시면 쉽게 풀어 설명해 드릴게요.",
+  timestamp: new Date(),
+}
+
+const defaultResponses = [
+  "그림 분석 서비스는 아이가 그린 그림을 AI가 분석하여 심리 상태와 발달 단계를 파악해드립니다. 상단 메뉴의 '그림 분석'에서 시작하실 수 있어요.",
+  "아이의 그림에는 감정과 생각이 담겨 있습니다. 색상 사용, 크기, 위치 등을 종합적으로 분석하여 아이의 마음을 이해할 수 있도록 도와드려요.",
+  "그림일기 OCR 기능을 이용하시면 아이의 손글씨를 텍스트로 변환할 수 있습니다. 소중한 추억을 디지털로 보관해보세요.",
+  "주변 상담소 찾기 기능에서 가까운 아동 심리 상담 센터를 찾아보실 수 있습니다. 전문 상담이 필요하시면 이용해보세요.",
+  "맘스퀘어 커뮤니티에서 다른 부모님들과 육아 경험을 나누실 수 있습니다. 전문가 조언도 받아보세요.",
+]
+
+const analysisResponses = [
+  "종합 점수는 여러 요소(구성요소, 색상 사용, 공간 활용, 표현력)를 종합해 산출한 지표입니다. 점수가 높을수록 전반적인 표현이 안정적이라는 의미예요.",
+  "발달 단계 평가는 연령대 평균과 비교한 지표로, 또래 대비 어떤 부분이 강점/보완인지 알려줍니다. 궁금한 항목을 지정해 주세요.",
+  "감정 상태 해석은 색상·크기·배치와 같은 표현 특성을 기반으로 합니다. 특정 색상이나 요소의 의미가 궁금하시면 알려 주세요.",
+  "구성요소 분석에서 '미감지'로 표시된 항목은 그림에 명확한 형태가 없었을 가능성이 있어요. 아이의 의도나 이야기와 함께 보시면 좋아요.",
+  "추가 설명이 필요한 결과 항목을 콕 집어 말씀해 주시면 그 부분을 더 자세히 풀어드릴게요.",
 ]
 
 export function ChatbotModal() {
+  const pathname = usePathname()
+  const isAnalysisResult = pathname === "/analysis/result"
   const [isOpen, setIsOpen] = useState(false)
-  const [messages, setMessages] = useState<Message[]>(initialMessages)
+  const [messages, setMessages] = useState<Message[]>(() => [
+    isAnalysisResult ? analysisWelcomeMessage : defaultWelcomeMessage,
+  ])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const responses = useMemo(
+    () => (isAnalysisResult ? analysisResponses : defaultResponses),
+    [isAnalysisResult]
+  )
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -37,6 +69,11 @@ export function ChatbotModal() {
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  useEffect(() => {
+    setMessages([isAnalysisResult ? analysisWelcomeMessage : defaultWelcomeMessage])
+    setIsOpen(false)
+  }, [isAnalysisResult])
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return
@@ -54,14 +91,6 @@ export function ChatbotModal() {
 
     // Simulate AI response (replace with actual API call)
     setTimeout(() => {
-      const responses = [
-        "그림 분석 서비스는 아이가 그린 그림을 AI가 분석하여 심리 상태와 발달 단계를 파악해드립니다. 상단 메뉴의 '그림 분석'에서 시작하실 수 있어요.",
-        "아이의 그림에는 감정과 생각이 담겨 있습니다. 색상 사용, 크기, 위치 등을 종합적으로 분석하여 아이의 마음을 이해할 수 있도록 도와드려요.",
-        "그림일기 OCR 기능을 이용하시면 아이의 손글씨를 텍스트로 변환할 수 있습니다. 소중한 추억을 디지털로 보관해보세요.",
-        "주변 상담소 찾기 기능에서 가까운 아동 심리 상담 센터를 찾아보실 수 있습니다. 전문 상담이 필요하시면 이용해보세요.",
-        "맘스퀘어 커뮤니티에서 다른 부모님들과 육아 경험을 나누실 수 있습니다. 전문가 조언도 받아보세요.",
-      ]
-      
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
@@ -86,21 +115,32 @@ export function ChatbotModal() {
       {/* Floating Button */}
       <button
         onClick={() => setIsOpen(true)}
-        className={`fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-primary text-white shadow-lg hover:bg-primary/90 transition-all duration-300 flex items-center justify-center ${
-          isOpen ? "scale-0 opacity-0" : "scale-100 opacity-100"
-        }`}
+        className={`fixed z-50 shadow-lg transition-all duration-300 flex items-center justify-center ${
+          isAnalysisResult
+            ? "bottom-6 left-1/2 h-14 w-[min(640px,calc(100vw-32px))] -translate-x-1/2 rounded-full bg-primary text-white hover:bg-primary/90 px-6"
+            : "bottom-6 right-6 h-14 w-14 rounded-full bg-primary text-white hover:bg-primary/90"
+        } ${isOpen ? "scale-0 opacity-0" : "scale-100 opacity-100"}`}
         aria-label="채팅 열기"
       >
-        <MessageCircle className="h-6 w-6" />
+        {isAnalysisResult ? (
+          <>
+            <MessageCircle className="h-5 w-5 mr-2" />
+            <span className="text-sm md:text-base font-medium">
+              추가적인 설명이 필요하신가요?
+            </span>
+          </>
+        ) : (
+          <MessageCircle className="h-6 w-6" />
+        )}
       </button>
 
       {/* Chat Modal */}
       <div
-        className={`fixed bottom-6 right-6 z-50 w-[360px] max-w-[calc(100vw-48px)] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transition-all duration-300 ${
-          isOpen
-            ? "scale-100 opacity-100 translate-y-0"
-            : "scale-95 opacity-0 translate-y-4 pointer-events-none"
-        }`}
+        className={`fixed z-50 w-[360px] max-w-[calc(100vw-48px)] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transition-all duration-300 ${
+          isAnalysisResult
+            ? "bottom-24 left-1/2 -translate-x-1/2"
+            : "bottom-6 right-6"
+        } ${isOpen ? "scale-100 opacity-100 translate-y-0" : "scale-95 opacity-0 translate-y-4 pointer-events-none"}`}
       >
         {/* Header */}
         <div className="bg-primary px-4 py-3 flex items-center justify-between">
