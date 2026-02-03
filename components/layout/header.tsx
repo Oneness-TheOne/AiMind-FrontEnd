@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useState, useEffect } from "react"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Menu, X, Home, FileImage, MapPin, Users, User, BookOpen } from "lucide-react"
@@ -19,7 +19,9 @@ const navigation = [
 export function Header() {
   const [isOpen, setIsOpen] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
   const pathname = usePathname()
+  const router = useRouter()
   const isHomePage = pathname === "/"
 
   useEffect(() => {
@@ -29,6 +31,21 @@ export function Header() {
     window.addEventListener("scroll", handleScroll)
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
+
+  useEffect(() => {
+    const token =
+      localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token")
+    setIsLoggedIn(Boolean(token))
+  }, [pathname])
+
+  const handleLogout = () => {
+    localStorage.removeItem("auth_token")
+    localStorage.removeItem("auth_email")
+    sessionStorage.removeItem("auth_token")
+    sessionStorage.removeItem("auth_email")
+    setIsLoggedIn(false)
+    router.push("/")
+  }
 
   const showTransparent = isHomePage && !isScrolled
 
@@ -70,18 +87,28 @@ export function Header() {
 
         {/* Desktop CTA */}
         <div className="hidden lg:block">
-          <Link href="/login">
-            <Button 
-              size="sm" 
+          {isLoggedIn ? (
+            <Button
+              size="sm"
+              onClick={handleLogout}
               className={`rounded-md px-6 h-9 ${
-                showTransparent 
-                  ? "bg-primary text-white hover:bg-primary/90" 
-                  : ""
+                showTransparent ? "bg-primary text-white hover:bg-primary/90" : ""
               }`}
             >
-              로그인
+              로그아웃
             </Button>
-          </Link>
+          ) : (
+            <Link href="/login">
+              <Button
+                size="sm"
+                className={`rounded-md px-6 h-9 ${
+                  showTransparent ? "bg-primary text-white hover:bg-primary/90" : ""
+                }`}
+              >
+                로그인
+              </Button>
+            </Link>
+          )}
         </div>
 
         {/* Mobile Menu */}
@@ -119,11 +146,21 @@ export function Header() {
                 })}
               </nav>
               <div className="border-t border-slate-100 pt-4 px-4">
-                <Link href="/login" onClick={() => setIsOpen(false)}>
-                  <Button className="w-full">
-                    로그인
+                {isLoggedIn ? (
+                  <Button
+                    className="w-full"
+                    onClick={() => {
+                      setIsOpen(false)
+                      handleLogout()
+                    }}
+                  >
+                    로그아웃
                   </Button>
-                </Link>
+                ) : (
+                  <Link href="/login" onClick={() => setIsOpen(false)}>
+                    <Button className="w-full">로그인</Button>
+                  </Link>
+                )}
               </div>
             </div>
           </SheetContent>

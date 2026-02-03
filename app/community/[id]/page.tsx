@@ -65,6 +65,8 @@ export default function CommunityPostPage() {
   const [post, setPost] = useState<Post | null>(null)
   const [comments, setComments] = useState<Comment[]>([])
   const [newComment, setNewComment] = useState("")
+  const [replyDrafts, setReplyDrafts] = useState<Record<number, string>>({})
+  const [activeReplyId, setActiveReplyId] = useState<number | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState("")
@@ -108,8 +110,8 @@ export default function CommunityPostPage() {
     })
   }
 
-  const handleSubmitComment = async () => {
-    const trimmed = newComment.trim()
+  const submitComment = async (content: string, parentId?: number | null) => {
+    const trimmed = content.trim()
     if (!trimmed) return
     const token = getAuthToken()
     if (!token) {
@@ -127,7 +129,9 @@ export default function CommunityPostPage() {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ content: trimmed }),
+          body: JSON.stringify(
+            parentId ? { content: trimmed, parent_id: parentId } : { content: trimmed }
+          ),
         }
       )
       if (!response.ok) {
@@ -150,13 +154,37 @@ export default function CommunityPostPage() {
       }
       setComments(prev => [...prev, mapped])
       setPost(prev => (prev ? { ...prev, comments: prev.comments + 1 } : prev))
-      setNewComment("")
+      if (parentId) {
+        setReplyDrafts(prev => ({ ...prev, [parentId]: "" }))
+        setActiveReplyId(null)
+      } else {
+        setNewComment("")
+      }
     } catch (error) {
       alert(error instanceof Error ? error.message : "댓글 등록에 실패했습니다.")
     } finally {
       setIsSubmitting(false)
     }
   }
+
+  const handleSubmitComment = async () => {
+    await submitComment(newComment)
+  }
+
+  const handleSubmitReply = async (parentId: number) => {
+    await submitComment(replyDrafts[parentId] ?? "", parentId)
+  }
+
+  const repliesByParent = comments.reduce<Record<number, Comment[]>>((acc, comment) => {
+    if (comment.parentId) {
+      const key = comment.parentId
+      if (!acc[key]) acc[key] = []
+      acc[key].push(comment)
+    }
+    return acc
+  }, {})
+
+  const topLevelComments = comments.filter(comment => !comment.parentId)
 
   useEffect(() => {
     if (!params?.id) return
@@ -373,13 +401,8 @@ export default function CommunityPostPage() {
                   <p className="text-sm text-slate-400">아직 댓글이 없습니다.</p>
                 )}
                 <div className="space-y-4">
-                  {comments.map(comment => (
-                    <div
-                      key={comment.id}
-                      className={`rounded-xl border border-slate-100 p-4 ${
-                        comment.parentId ? "ml-8 bg-slate-50/60" : "bg-white"
-                      }`}
-                    >
+                  {topLevelComments.map(comment => (
+                    <div key={comment.id} className="rounded-xl border border-slate-100 p-4 bg-white">
                       <div className="flex items-center justify-between text-xs text-slate-400">
                         <div className="flex items-center gap-2">
                           <Avatar className="h-6 w-6">
@@ -405,6 +428,91 @@ export default function CommunityPostPage() {
                       <p className="mt-2 text-sm text-slate-700 whitespace-pre-line">
                         {comment.content}
                       </p>
+                      <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
+                        <button
+                          type="button"
+                          className="text-primary hover:underline"
+                          onClick={() =>
+                            setActiveReplyId(prev => (prev === comment.id ? null : comment.id))
+                          }
+                        >
+                          답글 달기
+                        </button>
+                      </div>
+                      {activeReplyId === comment.id && (
+                        <div className="mt-3 space-y-2">
+                          <Textarea
+                            value={replyDrafts[comment.id] ?? ""}
+                            onChange={(event) =>
+                              setReplyDrafts(prev => ({
+                                ...prev,
+                                [comment.id]: event.target.value,
+                              }))
+                            }
+                            placeholder={`${comment.author.name}님에게 답글을 남겨보세요`}
+                            className="min-h-[84px]"
+                          />
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setReplyDrafts(prev => ({ ...prev, [comment.id]: "" }))
+                                setActiveReplyId(null)
+                              }}
+                            >
+                              취소
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => handleSubmitReply(comment.id)}
+                              disabled={
+                                isSubmitting || (replyDrafts[comment.id] ?? "").trim().length === 0
+                              }
+                            >
+                              {isSubmitting ? "등록 중..." : "답글 등록"}
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      {repliesByParent[comment.id]?.length ? (
+                        <div className="mt-4 space-y-3">
+                          {repliesByParent[comment.id].map(reply => (
+                            <div
+                              key={reply.id}
+                              className="ml-8 rounded-xl border border-slate-100 p-4 bg-slate-50/60"
+                            >
+                              <div className="flex items-center justify-between text-xs text-slate-400">
+                                <div className="flex items-center gap-2">
+                                  <Avatar className="h-6 w-6">
+                                    {resolveProfileImageUrl(reply.author.profileImageUrl) && (
+                                      <AvatarImage
+                                        src={resolveProfileImageUrl(reply.author.profileImageUrl) as string}
+                                        alt={reply.author.name}
+                                      />
+                                    )}
+                                    <AvatarFallback className={`text-white text-[10px] ${
+                                      reply.author.badge === "전문가" ? "bg-primary" : "bg-slate-400"
+                                    }`}>
+                                      {reply.author.name[0]}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <span className="text-slate-600">{reply.author.name}</span>
+                                  {reply.author.badge && (
+                                    <span className="text-primary">{reply.author.badge}</span>
+                                  )}
+                                </div>
+                                <span>{reply.createdAt}</span>
+                              </div>
+                              <p className="mt-2 text-sm text-slate-700 whitespace-pre-line">
+                                {reply.content}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                   ))}
                 </div>
