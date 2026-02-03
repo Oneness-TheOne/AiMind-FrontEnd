@@ -221,7 +221,16 @@ export function ChatbotModal() {
                     : "bg-white border border-slate-200 text-slate-700 rounded-tl-sm"
                 }`}
               >
-                <p className="text-sm leading-relaxed">{message.content}</p>
+                {message.role === "assistant" ? (
+                  <div
+                    className="text-sm leading-relaxed prose prose-sm max-w-none"
+                    dangerouslySetInnerHTML={{ __html: message.content }}
+                  />
+                ) : (
+                  <p className="text-sm leading-relaxed whitespace-pre-line">
+                    {message.content}
+                  </p>
+                )}
               </div>
             </div>
           ))}
