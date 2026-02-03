@@ -99,6 +99,7 @@ export default function CommunityPostPage() {
   const formatDateLabel = (value: string) => {
     const parsed = new Date(value)
     if (Number.isNaN(parsed.getTime())) return value
+    parsed.setHours(parsed.getHours() + 9)
     return parsed.toLocaleString("ko-KR", {
       month: "numeric",
       day: "numeric",

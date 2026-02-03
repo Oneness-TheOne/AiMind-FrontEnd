@@ -93,11 +93,19 @@ export default function CommunityPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [posts, setPosts] = useState<Post[]>([])
   const [categories, setCategories] = useState(defaultCategories)
-  const [sortBy, setSortBy] = useState<"popular" | "latest">("popular")
+  const [sortBy, setSortBy] = useState<"view_count" | "like_count" | "latest">(
+    "view_count"
+  )
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState("")
+  const [stats, setStats] = useState({
+    users: 0,
+    posts: 0,
+    comments: 0,
+    experts: 0,
+  })
 
   const heroAnim = useScrollAnimation()
   const searchAnim = useScrollAnimation()
@@ -123,6 +131,7 @@ export default function CommunityPage() {
   const formatDateLabel = (value: string) => {
     const parsed = new Date(value)
     if (Number.isNaN(parsed.getTime())) return value
+    parsed.setHours(parsed.getHours() + 9)
     return parsed.toLocaleString("ko-KR", {
       month: "numeric",
       day: "numeric",
@@ -228,6 +237,29 @@ export default function CommunityPage() {
   useEffect(() => {
     fetchCategories()
   }, [])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch(`${apiBaseUrl}/community/stats`, { signal: controller.signal })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error("커뮤니티 통계를 불러오지 못했습니다.")
+        }
+        return response.json()
+      })
+      .then(data => {
+        setStats({
+          users: Number(data.users ?? 0),
+          posts: Number(data.posts ?? 0),
+          comments: Number(data.comments ?? 0),
+          experts: Number(data.experts ?? 0),
+        })
+      })
+      .catch(error => {
+        if (error instanceof DOMException && error.name === "AbortError") return
+      })
+    return () => controller.abort()
+  }, [apiBaseUrl])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -352,19 +384,27 @@ export default function CommunityPage() {
           <div className="container mx-auto px-4 lg:px-8 py-6">
             <div className="flex justify-center gap-12 md:gap-20">
               <div className="text-center">
-                <p className="text-2xl font-bold text-slate-800">12,345</p>
+                <p className="text-2xl font-bold text-slate-800">
+                  {stats.users.toLocaleString("ko-KR")}
+                </p>
                 <p className="text-xs text-slate-500 mt-1">회원</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-slate-800">5,678</p>
+                <p className="text-2xl font-bold text-slate-800">
+                  {stats.posts.toLocaleString("ko-KR")}
+                </p>
                 <p className="text-xs text-slate-500 mt-1">게시글</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-slate-800">23,456</p>
+                <p className="text-2xl font-bold text-slate-800">
+                  {stats.comments.toLocaleString("ko-KR")}
+                </p>
                 <p className="text-xs text-slate-500 mt-1">댓글</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-primary">89</p>
+                <p className="text-2xl font-bold text-primary">
+                  {stats.experts.toLocaleString("ko-KR")}
+                </p>
                 <p className="text-xs text-slate-500 mt-1">전문가</p>
               </div>
             </div>
@@ -409,19 +449,32 @@ export default function CommunityPage() {
 
               {/* Sort */}
               <div className="flex items-center gap-4 mb-6 text-sm">
-                <button 
-                  onClick={() => setSortBy("popular")}
-                  className={`flex items-center gap-1.5 ${sortBy === "popular" ? "text-primary font-medium" : "text-slate-500"}`}
+                <button
+                  onClick={() => setSortBy("latest")}
+                  className={`flex items-center gap-1.5 ${
+                    sortBy === "latest" ? "text-primary font-medium" : "text-slate-500"
+                  }`}
+                >
+                  <Clock className="h-4 w-4" />
+                  최신순
+                </button>
+                <button
+                  onClick={() => setSortBy("view_count")}
+                  className={`flex items-center gap-1.5 ${
+                    sortBy === "view_count" ? "text-primary font-medium" : "text-slate-500"
+                  }`}
                 >
                   <TrendingUp className="h-4 w-4" />
                   인기순
                 </button>
-                <button 
-                  onClick={() => setSortBy("latest")}
-                  className={`flex items-center gap-1.5 ${sortBy === "latest" ? "text-primary font-medium" : "text-slate-500"}`}
+                <button
+                  onClick={() => setSortBy("like_count")}
+                  className={`flex items-center gap-1.5 ${
+                    sortBy === "like_count" ? "text-primary font-medium" : "text-slate-500"
+                  }`}
                 >
-                  <Clock className="h-4 w-4" />
-                  최신순
+                  <Heart className="h-4 w-4" />
+                  공감순
                 </button>
               </div>
 

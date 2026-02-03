@@ -151,6 +151,7 @@ export default function MyPage() {
     name: "",
     email: "",
     profile_image_url: "base",
+    created_at: "",
   })
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
 
@@ -177,6 +178,15 @@ export default function MyPage() {
   }
 
   const profileImageSrc = resolveProfileImageUrl(profile.profile_image_url)
+  const formattedJoinDate = (() => {
+    if (!profile.created_at) return "가입일 정보 없음"
+    const parsed = new Date(profile.created_at)
+    if (Number.isNaN(parsed.getTime())) return "가입일 정보 없음"
+    const year = parsed.getFullYear()
+    const month = String(parsed.getMonth() + 1).padStart(2, "0")
+    const day = String(parsed.getDate()).padStart(2, "0")
+    return `${year}.${month}.${day} 가입`
+  })()
 
   const totalHistoryPages = Math.ceil(mockAnalysisHistory.length / ITEMS_PER_PAGE)
   const paginatedHistory = mockAnalysisHistory.slice(
@@ -208,6 +218,7 @@ export default function MyPage() {
           name: data.name ?? "",
           email: data.email ?? "",
           profile_image_url: data.profile_image_url ?? "base",
+          created_at: data.created_at ?? "",
         })
       } catch {
         // ignore profile fetch errors for now
@@ -248,14 +259,7 @@ export default function MyPage() {
                   <span className="flex items-center gap-1.5">
                     <Calendar className="h-4 w-4" />
                     <span className="flex items-center gap-1.5">
-                      {profileImageSrc && (
-                        <img
-                          src={profileImageSrc}
-                          alt={profile.name || "프로필"}
-                          className="h-4 w-4 rounded-full object-cover border border-white/30"
-                        />
-                      )}
-                      2023.06.15 가입
+                      {formattedJoinDate}
                     </span>
                   </span>
                   <span className="flex items-center gap-1.5">
