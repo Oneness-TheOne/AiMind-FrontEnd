@@ -49,7 +49,7 @@ const analysisResponses = [
 
 export function ChatbotModal() {
   const pathname = usePathname()
-  const isAnalysisResult = pathname === "/analysis/result"
+  const isAnalysisResult = pathname?.startsWith("/analysis/result")
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<Message[]>(() => [
     isAnalysisResult ? analysisWelcomeMessage : defaultWelcomeMessage,
@@ -136,21 +136,32 @@ export function ChatbotModal() {
       {/* Floating Button */}
       <button
         onClick={() => setIsOpen(true)}
-        className={`fixed z-50 shadow-lg transition-all duration-300 flex items-center justify-center bottom-6 right-6 h-14 w-14 rounded-full bg-primary text-white hover:bg-primary/90 ${
-          isOpen ? "scale-0 opacity-0" : "scale-100 opacity-100"
-        }`}
+        className={`fixed z-50 shadow-lg transition-all duration-300 flex items-center justify-center ${
+          isAnalysisResult
+            ? "bottom-6 left-1/2 h-14 w-[calc(100vw-32px)] max-w-[640px] -translate-x-1/2 rounded-full bg-primary text-white hover:bg-primary/90 px-6"
+            : "bottom-6 right-6 h-14 w-14 rounded-full bg-primary text-white hover:bg-primary/90"
+        } ${isOpen ? "scale-0 opacity-0" : "scale-100 opacity-100"}`}
         aria-label="채팅 열기"
       >
-        <MessageCircle className="h-6 w-6" />
+        {isAnalysisResult ? (
+          <>
+            <MessageCircle className="h-5 w-5 mr-2" />
+            <span className="text-sm md:text-base font-medium">
+              추가적인 설명이 필요하신가요?
+            </span>
+          </>
+        ) : (
+          <MessageCircle className="h-6 w-6" />
+        )}
       </button>
 
       {/* Chat Modal */}
       <div
-        className={`fixed z-50 w-[360px] max-w-[calc(100vw-48px)] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transition-all duration-300 bottom-24 right-6 ${
-          isOpen
-            ? "scale-100 opacity-100 translate-y-0"
-            : "scale-95 opacity-0 translate-y-4 pointer-events-none"
-        }`}
+        className={`fixed z-50 w-[360px] max-w-[calc(100vw-48px)] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transition-all duration-300 ${
+          isAnalysisResult
+            ? "bottom-24 left-1/2 -translate-x-1/2"
+            : "bottom-24 right-6"
+        } ${isOpen ? "scale-100 opacity-100 translate-y-0" : "scale-95 opacity-0 translate-y-4 pointer-events-none"}`}
       >
         {/* Header */}
         <div className="bg-primary px-4 py-3 flex items-center justify-between">
