@@ -29,6 +29,19 @@ export default function AnalyzingPage() {
   const [progress, setProgress] = useState(0)
   const [currentStep, setCurrentStep] = useState(0)
   const [currentTip, setCurrentTip] = useState(0)
+  const [error, setError] = useState<string | null>(null)
+
+  const dataUrlToFile = (dataUrl: string, filename: string) => {
+    const [header, data] = dataUrl.split(",")
+    const mimeMatch = header?.match(/data:(.*?);base64/)
+    const mime = mimeMatch ? mimeMatch[1] : "image/png"
+    const binary = atob(data)
+    const array = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i += 1) {
+      array[i] = binary.charCodeAt(i)
+    }
+    return new File([array], filename, { type: mime })
+  }
 
   useEffect(() => {
     const tipInterval = setInterval(() => {
@@ -41,18 +54,91 @@ export default function AnalyzingPage() {
   useEffect(() => {
     const progressInterval = setInterval(() => {
       setProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(progressInterval)
-          setTimeout(() => {
-            router.push("/analysis/result")
-          }, 500)
-          return 100
+        if (prev >= 95) {
+          return prev
         }
         return prev + 1
       })
     }, 60)
 
     return () => clearInterval(progressInterval)
+  }, [router])
+
+  useEffect(() => {
+    const globalStore = globalThis as typeof globalThis & {
+      __analysisPayload?: any
+      __analysisFiles?: (File | null)[]
+    }
+    const payload = globalStore.__analysisPayload
+    const files = globalStore.__analysisFiles || []
+    if (!payload) {
+      router.push("/analysis")
+      return
+    }
+    const images: string[] = payload.images || []
+    const slots: { label: string; objectKey: string }[] = payload.slots || []
+    const childInfo = payload.childInfo || {}
+
+    if (images.length !== 4 || slots.length !== 4 || images.some((img) => !img)) {
+      setError("분석에 필요한 이미지가 부족합니다.")
+      return
+    }
+
+    const formData = new FormData()
+    images.forEach((dataUrl, index) => {
+      const slot = slots[index]
+      const sourceFile = files[index]
+      const file = sourceFile || dataUrlToFile(dataUrl, `${slot.label}.png`)
+      formData.append(slot.objectKey, file)
+    })
+    formData.append("child_name", childInfo.name || "")
+    formData.append("child_age", childInfo.age || "")
+    formData.append("child_gender", childInfo.gender || "")
+
+    fetch("http://localhost:8080/analyze", {
+      method: "POST",
+      body: formData,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          const detail = await response.text()
+          throw new Error(detail || "분석 요청 실패")
+        }
+        return response.json()
+      })
+      .then((data) => {
+        const globalStore = globalThis as typeof globalThis & {
+          __analysisResponse?: any
+          __analysisImages?: string[]
+          __analysisBoxImages?: Record<string, string | null>
+        }
+
+        globalStore.__analysisResponse = data
+        globalStore.__analysisImages = images
+        globalStore.__analysisBoxImages = {
+          tree: data?.results?.tree?.box_image_base64 || null,
+          house: data?.results?.house?.box_image_base64 || null,
+          man: data?.results?.man?.box_image_base64 || null,
+          woman: data?.results?.woman?.box_image_base64 || null,
+        }
+
+        const storageData = JSON.parse(JSON.stringify(data))
+        if (storageData?.results) {
+          Object.keys(storageData.results).forEach((key) => {
+            if (storageData.results[key]) {
+              storageData.results[key].box_image_base64 = null
+            }
+          })
+        }
+        sessionStorage.setItem("analysisResponse", JSON.stringify(storageData))
+        setProgress(100)
+        setTimeout(() => {
+          router.push("/analysis/result")
+        }, 500)
+      })
+      .catch((err: Error) => {
+        setError(err.message || "분석 요청 중 오류가 발생했습니다.")
+      })
   }, [router])
 
   useEffect(() => {
@@ -99,6 +185,12 @@ export default function AnalyzingPage() {
               </div>
               <Progress value={progress} className="h-3" />
             </div>
+
+            {error && (
+              <div className="mb-6 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {error}
+              </div>
+            )}
 
             {/* Steps */}
             <div className="space-y-3 mb-8">

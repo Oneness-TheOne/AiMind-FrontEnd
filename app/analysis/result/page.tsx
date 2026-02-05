@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import React from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
@@ -24,6 +25,15 @@ import {
   Home,
   TreeDeciduous,
   User,
+  FileText,
+  LayoutGrid,
+  Layers,
+  Sparkles,
+  Cloud,
+  ThumbsUp,
+  Check,
+  AlertCircle,
+  AlertTriangle,
 } from "lucide-react"
 import {
   RadarChart,
@@ -40,17 +50,6 @@ import {
   Tooltip,
   Legend,
 } from "recharts"
-
-// Mock analysis result data
-const analysisResult = {
-  childName: "민준이",
-  age: 7,
-  drawingType: "집-나무-사람 (HTP)",
-  overallScore: 85,
-  summary: "민준이는 전반적으로 안정적인 정서 상태를 보이며, 또래 평균 대비 우수한 발달 수준을 나타냅니다.",
-  developmentStage: "정상 발달",
-  emotionalState: "안정",
-}
 
 const detectedElements = [
   { name: "집", detected: true, note: "안정적인 형태, 굴뚝에서 연기 표현" },
@@ -122,6 +121,140 @@ const recommendations = [
 
 export default function ResultPage() {
   const [activeTab, setActiveTab] = useState("basic")
+  const [activeImageIndex, setActiveImageIndex] = useState(0)
+  const [activeInterpretTab, setActiveInterpretTab] = useState("tree")
+  const [analysisResult, setAnalysisResult] = useState({
+    childName: "아이",
+    age: "-",
+    drawingType: "집-나무-사람 (HTP)",
+    overallScore: 0,
+    summary: "해석 요약을 불러오는 중입니다.",
+    developmentStage: "분석 완료",
+    emotionalState: "분석 완료",
+  })
+  const [imagePreviews, setImagePreviews] = useState<string[]>([])
+  const [boxImages, setBoxImages] = useState<Record<string, string | null>>({})
+  const [interpretations, setInterpretations] = useState<Record<string, any>>({})
+
+  const isLeafInterpretation = (value: any) =>
+    value && typeof value === "object" && ("내용" in value || "논문_근거" in value)
+
+  const renderInterpretationSection = (section: any) => {
+    if (!section || typeof section !== "object") {
+      return <div className="text-sm text-muted-foreground">내용이 없습니다.</div>
+    }
+    if (isLeafInterpretation(section)) {
+      return (
+        <div className="space-y-3">
+          <p className="text-[15px] leading-relaxed text-foreground">{section.내용 || "내용이 없습니다."}</p>
+          {section.논문_근거 && (
+            <p className="text-xs text-muted-foreground">근거: {section.논문_근거}</p>
+          )}
+        </div>
+      )
+    }
+    return (
+      <div className="space-y-4">
+        {Object.entries(section).map(([subKey, subVal]) => {
+          const entry = subVal as any
+          return (
+          <div key={subKey} className="rounded-lg border bg-background p-4">
+            <p className="text-sm font-semibold text-foreground mb-3">{subKey.replace(/_/g, " ")}</p>
+            {isLeafInterpretation(entry) ? (
+              <div className="space-y-2">
+                <p className="text-[15px] leading-relaxed text-foreground">{entry.내용 || "내용이 없습니다."}</p>
+                {entry.논문_근거 && (
+                  <p className="text-xs text-muted-foreground">근거: {entry.논문_근거}</p>
+                )}
+              </div>
+            ) : (
+              <pre className="whitespace-pre-wrap text-xs text-muted-foreground">
+                {JSON.stringify(entry, null, 2)}
+              </pre>
+            )}
+          </div>
+          )
+        })}
+      </div>
+    )
+  }
+
+  useEffect(() => {
+    const globalStore = globalThis as typeof globalThis & {
+      __analysisResponse?: any
+      __analysisImages?: string[]
+      __analysisBoxImages?: Record<string, string | null>
+    }
+    const rawResponse = sessionStorage.getItem("analysisResponse")
+    const rawImages = sessionStorage.getItem("analysisImages")
+    const memoryResponse = globalStore.__analysisResponse
+    const memoryImages = globalStore.__analysisImages
+    const memoryBoxImages = globalStore.__analysisBoxImages
+
+    if (memoryResponse || rawResponse) {
+      const response = memoryResponse || JSON.parse(rawResponse || "{}")
+      const child = response?.child || {}
+      const results = response?.results || {}
+      const rawSummary =
+        results.tree?.interpretation?.전체_요약 ||
+        results.house?.interpretation?.전체_요약 ||
+        results.man?.interpretation?.전체_요약 ||
+        results.woman?.interpretation?.전체_요약 ||
+        "해석 요약이 없습니다."
+      const summary =
+        typeof rawSummary === "string"
+          ? rawSummary
+          : rawSummary?.내용 || JSON.stringify(rawSummary, null, 2)
+
+      setAnalysisResult({
+        childName: child.name || "아이",
+        age: child.age || "-",
+        drawingType: "집-나무-사람 (HTP)",
+        overallScore: 0,
+        summary,
+        developmentStage: "분석 완료",
+        emotionalState: "분석 완료",
+      })
+      setInterpretations(results)
+      setBoxImages({
+        tree: memoryBoxImages?.tree || results.tree?.box_image_base64 || null,
+        house: memoryBoxImages?.house || results.house?.box_image_base64 || null,
+        man: memoryBoxImages?.man || results.man?.box_image_base64 || null,
+        woman: memoryBoxImages?.woman || results.woman?.box_image_base64 || null,
+      })
+    }
+    if (memoryImages?.length) {
+      setImagePreviews(memoryImages)
+    } else if (rawImages) {
+      setImagePreviews(JSON.parse(rawImages))
+    }
+  }, [])
+
+  const analysisImages = useMemo(
+    () => [
+      {
+        label: "나무",
+        preview: boxImages.tree || imagePreviews[0],
+        badgeClass: "bg-accent/20 text-accent-foreground",
+      },
+      {
+        label: "집",
+        preview: boxImages.house || imagePreviews[1],
+        badgeClass: "bg-primary/20 text-primary",
+      },
+      {
+        label: "남자사람",
+        preview: boxImages.man || imagePreviews[2],
+        badgeClass: "bg-chart-4/20 text-chart-4",
+      },
+      {
+        label: "여자사람",
+        preview: boxImages.woman || imagePreviews[3],
+        badgeClass: "bg-chart-3/20 text-chart-3",
+      },
+    ],
+    [boxImages, imagePreviews]
+  )
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -231,39 +364,34 @@ export default function ResultPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="relative aspect-square bg-muted rounded-xl overflow-hidden">
-                      {/* Placeholder for drawing with overlay */}
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="text-center p-8">
-                          <svg viewBox="0 0 200 200" className="w-48 h-48 mx-auto mb-4">
-                            {/* House */}
-                            <rect x="30" y="80" width="60" height="50" fill="none" stroke="currentColor" strokeWidth="2" className="text-primary" />
-                            <polygon points="30,80 60,50 90,80" fill="none" stroke="currentColor" strokeWidth="2" className="text-primary" />
-                            <rect x="50" y="100" width="15" height="30" fill="none" stroke="currentColor" strokeWidth="2" className="text-muted-foreground" />
-                            <rect x="35" y="90" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" className="text-muted-foreground" />
-                            {/* Tree */}
-                            <rect x="120" y="100" width="10" height="30" fill="none" stroke="currentColor" strokeWidth="2" className="text-accent" />
-                            <circle cx="125" cy="80" r="25" fill="none" stroke="currentColor" strokeWidth="2" className="text-accent" />
-                            {/* Person */}
-                            <circle cx="170" cy="70" r="12" fill="none" stroke="currentColor" strokeWidth="2" className="text-chart-4" />
-                            <line x1="170" y1="82" x2="170" y2="110" stroke="currentColor" strokeWidth="2" className="text-chart-4" />
-                            <line x1="170" y1="90" x2="155" y2="100" stroke="currentColor" strokeWidth="2" className="text-chart-4" />
-                            <line x1="170" y1="90" x2="185" y2="100" stroke="currentColor" strokeWidth="2" className="text-chart-4" />
-                            <line x1="170" y1="110" x2="160" y2="130" stroke="currentColor" strokeWidth="2" className="text-chart-4" />
-                            <line x1="170" y1="110" x2="180" y2="130" stroke="currentColor" strokeWidth="2" className="text-chart-4" />
-                            {/* Sun */}
-                            <circle cx="40" cy="30" r="15" fill="none" stroke="currentColor" strokeWidth="2" className="text-chart-3" />
-                            {/* Ground */}
-                            <line x1="10" y1="130" x2="190" y2="130" stroke="currentColor" strokeWidth="2" className="text-muted-foreground" strokeDasharray="4" />
-                          </svg>
-                          <p className="text-sm text-muted-foreground">분석된 그림 이미지</p>
-                        </div>
+                      <div className="absolute inset-0 flex items-center justify-center p-4">
+                        {analysisImages[activeImageIndex]?.preview ? (
+                          <img
+                            src={analysisImages[activeImageIndex].preview || "/placeholder.svg"}
+                            alt={`${analysisImages[activeImageIndex].label} 분석 결과`}
+                            className="h-full w-full rounded-lg border object-cover"
+                          />
+                        ) : (
+                          <div className="text-sm text-muted-foreground">이미지가 없습니다.</div>
+                        )}
                       </div>
                       {/* Legend */}
                       <div className="absolute bottom-4 left-4 right-4 flex flex-wrap gap-2">
-                        <Badge variant="secondary" className="bg-primary/20 text-primary">집</Badge>
-                        <Badge variant="secondary" className="bg-accent/20 text-accent-foreground">나무</Badge>
-                        <Badge variant="secondary" className="bg-chart-4/20 text-chart-4">사람</Badge>
-                        <Badge variant="secondary" className="bg-chart-3/20 text-chart-3">태양</Badge>
+                        {analysisImages.map((item, index) => (
+                          <button
+                            key={item.label}
+                            type="button"
+                            onClick={() => setActiveImageIndex(index)}
+                            className="focus-visible:outline-none"
+                          >
+                            <Badge
+                              variant="secondary"
+                              className={`${item.badgeClass} ${activeImageIndex === index ? "ring-2 ring-primary/60" : ""}`}
+                            >
+                              {item.label}
+                            </Badge>
+                          </button>
+                        ))}
                       </div>
                     </div>
                   </CardContent>
@@ -408,31 +536,108 @@ export default function ResultPage() {
 
             {/* Psychology Interpretation Tab */}
             <TabsContent value="psychology" className="space-y-6">
+              {/* Summary Banner */}
+              <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent rounded-2xl p-6 border border-primary/20">
+                <div className="flex items-start gap-4">
+                  <div className="h-12 w-12 rounded-xl bg-primary/20 flex items-center justify-center shrink-0">
+                    <Brain className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-lg text-foreground mb-2">전체 요약</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      8세 여아의 나무 그림은 화면 왼쪽 편향된 나무 배치와 함께 다양한 부가 요소와 하늘 요소를 포함하고 있어, 
+                      아동의 주관적 경험과 환경에 대한 인식을 복합적으로 보여줍니다.
+                    </p>
+                    <div className="mt-3 inline-flex items-center gap-2 text-xs text-primary bg-primary/10 px-3 py-1 rounded-full">
+                      <FileText className="h-3 w-3" />
+                      HTP 검사 해석체계 구축 및 타당성 제고.pdf
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Interpretation Tabs */}
+              <Card className="border-0 shadow-sm">
+                <CardContent className="p-6">
+                  <Tabs value={activeInterpretTab} onValueChange={setActiveInterpretTab}>
+                    <TabsList className="grid w-full grid-cols-4 bg-slate-100 p-1 rounded-xl">
+                      <TabsTrigger value="tree" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">나무</TabsTrigger>
+                      <TabsTrigger value="house" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">집</TabsTrigger>
+                      <TabsTrigger value="man" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">남자아이</TabsTrigger>
+                      <TabsTrigger value="woman" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">여자아이</TabsTrigger>
+                    </TabsList>
+                    {["tree", "house", "man", "woman"].map((key) => {
+                      const value = interpretations[key]
+                      return (
+                        <TabsContent key={key} value={key} className="mt-6 space-y-6">
+                          {value?.interpretation ? (
+                            Object.entries(value.interpretation).map(([sectionKey, sectionValue]) => {
+                              const sectionIcons: Record<string, React.ReactNode> = {
+                                "구성_분석": <LayoutGrid className="h-4 w-4" />,
+                                "구성요소_분석": <Layers className="h-4 w-4" />,
+                                "부가요소_분석": <Sparkles className="h-4 w-4" />,
+                                "하늘요소_분석": <Cloud className="h-4 w-4" />,
+                                "발달_평가": <TrendingUp className="h-4 w-4" />,
+                                "종합_해석": <FileText className="h-4 w-4" />,
+                              }
+                              const sectionColors: Record<string, string> = {
+                                "구성_분석": "bg-blue-50 border-blue-200 text-blue-700",
+                                "구성요소_분석": "bg-purple-50 border-purple-200 text-purple-700",
+                                "부가요소_분석": "bg-amber-50 border-amber-200 text-amber-700",
+                                "하늘요소_분석": "bg-sky-50 border-sky-200 text-sky-700",
+                                "발달_평가": "bg-green-50 border-green-200 text-green-700",
+                                "종합_해석": "bg-teal-50 border-teal-200 text-teal-700",
+                              }
+                              return (
+                                <div key={sectionKey} className="rounded-xl border bg-white overflow-hidden">
+                                  <div className={`px-4 py-3 border-b flex items-center gap-2 ${sectionColors[sectionKey] || "bg-slate-50"}`}>
+                                    {sectionIcons[sectionKey] || <FileText className="h-4 w-4" />}
+                                    <span className="font-semibold text-sm">{sectionKey.replace(/_/g, " ")}</span>
+                                  </div>
+                                  <div className="p-4">
+                                    {renderInterpretationSection(sectionValue)}
+                                  </div>
+                                </div>
+                              )
+                            })
+                          ) : (
+                            <div className="text-center py-12 text-muted-foreground">
+                              <Brain className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                              <p>해석 결과가 없습니다.</p>
+                            </div>
+                          )}
+                        </TabsContent>
+                      )
+                    })}
+                  </Tabs>
+                </CardContent>
+              </Card>
+
               <div className="grid gap-6 lg:grid-cols-2">
                 {/* Radar Chart */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Brain className="h-5 w-5 text-primary" />
-                      심리 지표
+                <Card className="border-0 shadow-sm">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <Brain className="h-4 w-4 text-primary" />
+                      </div>
+                      심리 지표 분석
                     </CardTitle>
-                    <CardDescription>
-                      그림에서 분석된 심리적 특성입니다
-                    </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="h-[300px]">
+                    <div className="h-[280px]">
                       <ResponsiveContainer width="100%" height="100%">
-                        <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
-                          <PolarGrid />
-                          <PolarAngleAxis dataKey="subject" className="text-xs" />
-                          <PolarRadiusAxis angle={30} domain={[0, 100]} />
+                        <RadarChart cx="50%" cy="50%" outerRadius="75%" data={radarData}>
+                          <PolarGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                          <PolarAngleAxis dataKey="subject" tick={{ fill: '#64748b', fontSize: 11 }} />
+                          <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: '#94a3b8', fontSize: 10 }} />
                           <Radar
-                            name="민준이"
+                            name="분석 결과"
                             dataKey="A"
                             stroke="hsl(var(--primary))"
                             fill="hsl(var(--primary))"
-                            fillOpacity={0.3}
+                            fillOpacity={0.25}
+                            strokeWidth={2}
                           />
                         </RadarChart>
                       </ResponsiveContainer>
@@ -441,62 +646,132 @@ export default function ResultPage() {
                 </Card>
 
                 {/* Color Analysis */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Palette className="h-5 w-5 text-primary" />
+                <Card className="border-0 shadow-sm">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <Palette className="h-4 w-4 text-primary" />
+                      </div>
                       색상 심리 분석
                     </CardTitle>
-                    <CardDescription>
-                      사용된 색상과 그 심리적 의미입니다
-                    </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                       {colorAnalysis.map((color) => (
-                        <div key={color.color} className="flex items-center gap-3">
-                          <div className={`h-8 w-8 rounded-lg ${color.colorClass}`} />
-                          <div className="flex-1">
-                            <div className="flex justify-between mb-1">
-                              <span className="font-medium text-foreground">{color.color}</span>
-                              <span className="text-sm text-muted-foreground">{color.percentage}%</span>
+                        <div key={color.color} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors">
+                          <div className={`h-10 w-10 rounded-xl ${color.colorClass} shadow-sm`} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="font-medium text-sm text-foreground">{color.color}</span>
+                              <span className="text-xs font-semibold text-primary">{color.percentage}%</span>
                             </div>
-                            <p className="text-xs text-muted-foreground">{color.meaning}</p>
-                          </div>
-                          <div className="w-24">
-                            <Progress value={color.percentage} className="h-2" />
+                            <p className="text-xs text-muted-foreground truncate">{color.meaning}</p>
                           </div>
                         </div>
                       ))}
                     </div>
                   </CardContent>
                 </Card>
+              </div>
 
-                {/* Emotional State */}
-                <Card className="lg:col-span-2">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Heart className="h-5 w-5 text-primary" />
-                      감정 상태 해석
+              {/* Emotional State Grid */}
+              <Card className="border-0 shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Heart className="h-4 w-4 text-primary" />
+                    </div>
+                    종합 심리 상태
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {psychologyData.map((item) => {
+                      const getStatusColor = (score: number) => {
+                        if (score >= 80) return { bg: "bg-green-50", border: "border-green-200", text: "text-green-700", badge: "bg-green-100 text-green-700" }
+                        if (score >= 60) return { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-700", badge: "bg-amber-100 text-amber-700" }
+                        return { bg: "bg-red-50", border: "border-red-200", text: "text-red-700", badge: "bg-red-100 text-red-700" }
+                      }
+                      const status = getStatusColor(item.score)
+                      return (
+                        <div key={item.name} className={`p-4 rounded-xl border ${status.bg} ${status.border}`}>
+                          <div className="flex justify-between items-start mb-3">
+                            <span className="font-semibold text-sm text-foreground">{item.name}</span>
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${status.badge}`}>
+                              {item.score}점
+                            </span>
+                          </div>
+                          <div className="h-2 bg-white/80 rounded-full overflow-hidden mb-2">
+                            <div 
+                              className="h-full bg-primary rounded-full transition-all duration-500"
+                              style={{ width: `${item.score}%` }}
+                            />
+                          </div>
+                          <p className={`text-xs font-medium ${status.text}`}>
+                            {item.score >= 80 ? "양호한 수준" : item.score >= 60 ? "보통 수준" : "관심 필요"}
+                          </p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Positive & Attention Points */}
+              <div className="grid gap-6 lg:grid-cols-2">
+                <Card className="border-0 shadow-sm border-l-4 border-l-green-500">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base text-green-700">
+                      <ThumbsUp className="h-4 w-4" />
+                      긍정적인 측면
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid gap-4 md:grid-cols-3">
-                      {psychologyData.map((item) => (
-                        <div key={item.name} className="p-4 bg-muted/30 rounded-xl">
-                          <div className="flex justify-between items-center mb-3">
-                            <span className="font-medium text-foreground">{item.name}</span>
-                            <Badge variant="secondary" className="bg-primary/10 text-primary">
-                              {item.score}점
-                            </Badge>
-                          </div>
-                          <Progress value={item.score} className="h-2 mb-2" />
-                          <p className="text-xs text-muted-foreground">
-                            {item.score >= 80 ? "양호" : item.score >= 60 ? "보통" : "관심 필요"}
-                          </p>
+                    <ul className="space-y-3">
+                      <li className="flex items-start gap-3">
+                        <div className="h-5 w-5 rounded-full bg-green-100 flex items-center justify-center shrink-0 mt-0.5">
+                          <Check className="h-3 w-3 text-green-600" />
                         </div>
-                      ))}
-                    </div>
+                        <span className="text-sm text-muted-foreground">풍부한 상상력과 창의성, 다양한 환경 요소에 대한 관심</span>
+                      </li>
+                      <li className="flex items-start gap-3">
+                        <div className="h-5 w-5 rounded-full bg-green-100 flex items-center justify-center shrink-0 mt-0.5">
+                          <Check className="h-3 w-3 text-green-600" />
+                        </div>
+                        <span className="text-sm text-muted-foreground">감성적인 영역의 발달</span>
+                      </li>
+                      <li className="flex items-start gap-3">
+                        <div className="h-5 w-5 rounded-full bg-green-100 flex items-center justify-center shrink-0 mt-0.5">
+                          <Check className="h-3 w-3 text-green-600" />
+                        </div>
+                        <span className="text-sm text-muted-foreground">놀이와 즐거움에 대한 욕구 (그네 표현)</span>
+                      </li>
+                    </ul>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-0 shadow-sm border-l-4 border-l-amber-500">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base text-amber-700">
+                      <AlertCircle className="h-4 w-4" />
+                      주의 사항
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-3">
+                      <li className="flex items-start gap-3">
+                        <div className="h-5 w-5 rounded-full bg-amber-100 flex items-center justify-center shrink-0 mt-0.5">
+                          <AlertTriangle className="h-3 w-3 text-amber-600" />
+                        </div>
+                        <span className="text-sm text-muted-foreground">부정적 평가에 대한 두려움으로 인해 자신감 부족이나 위축된 모습을 보일 수 있습니다</span>
+                      </li>
+                      <li className="flex items-start gap-3">
+                        <div className="h-5 w-5 rounded-full bg-amber-100 flex items-center justify-center shrink-0 mt-0.5">
+                          <AlertTriangle className="h-3 w-3 text-amber-600" />
+                        </div>
+                        <span className="text-sm text-muted-foreground">내면의 안정감이나 자기 수용에 대한 노력이 필요합니다</span>
+                      </li>
+                    </ul>
                   </CardContent>
                 </Card>
               </div>

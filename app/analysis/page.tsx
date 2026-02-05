@@ -19,53 +19,183 @@ import { DrawingCanvas } from "@/components/analysis/drawing-canvas"
 
 export default function AnalysisPage() {
   const router = useRouter()
-  const [uploadedImage, setUploadedImage] = useState<string | null>(null)
+  const createEmptySlots = () =>
+    Array.from({ length: 4 }, () => ({ preview: null as string | null, file: null as File | null }))
+  const [uploadedImages, setUploadedImages] = useState(createEmptySlots)
   const [inputMode, setInputMode] = useState<"upload" | "draw">("upload")
   const [childInfo, setChildInfo] = useState({
     name: "",
     age: "",
     gender: "",
   })
-  const [isDragging, setIsDragging] = useState(false)
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(true)
-  }, [])
+  const slotConfigs = [
+    {
+      objectKey: "tree",
+      label: "나무",
+      weightPath: "C:\\Honey\\Projects\\mid-term\\AiMind-AiModels\\image_to_json\\tree_weights\\best.pt",
+    },
+    {
+      objectKey: "house",
+      label: "집",
+      weightPath: "C:\\Honey\\Projects\\mid-term\\AiMind-AiModels\\image_to_json\\house_weights\\weights\\best.pt",
+    },
+    {
+      objectKey: "man",
+      label: "남자사람",
+      weightPath: "C:\\Honey\\Projects\\mid-term\\AiMind-AiModels\\image_to_json\\man_weights\\best.pt",
+    },
+    {
+      objectKey: "woman",
+      label: "여자사람",
+      weightPath: "C:\\Honey\\Projects\\mid-term\\AiMind-AiModels\\image_to_json\\woman_weights\\best.pt",
+    },
+  ]
 
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
-  }, [])
+  const dataUrlToFile = (dataUrl: string, filename: string) => {
+    const [header, data] = dataUrl.split(",")
+    const mimeMatch = header?.match(/data:(.*?);base64/)
+    const mime = mimeMatch ? mimeMatch[1] : "image/png"
+    const binary = atob(data)
+    const array = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i += 1) {
+      array[i] = binary.charCodeAt(i)
+    }
+    return new File([array], filename, { type: mime })
+  }
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
-    const file = e.dataTransfer.files[0]
-    if (file && file.type.startsWith("image/")) {
-      const reader = new FileReader()
-      reader.onload = () => {
-        setUploadedImage(reader.result as string)
+  const resizeImageFile = useCallback(async (file: File, maxSize = 1024, quality = 0.82) => {
+    const imageUrl = URL.createObjectURL(file)
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const el = new Image()
+        el.onload = () => resolve(el)
+        el.onerror = () => reject(new Error("이미지 로드 실패"))
+        el.src = imageUrl
+      })
+
+      const scale = Math.min(1, maxSize / Math.max(img.width, img.height))
+      const targetW = Math.max(1, Math.round(img.width * scale))
+      const targetH = Math.max(1, Math.round(img.height * scale))
+      const canvas = document.createElement("canvas")
+      canvas.width = targetW
+      canvas.height = targetH
+      const ctx = canvas.getContext("2d")
+      if (!ctx) {
+        throw new Error("캔버스 생성 실패")
       }
-      reader.readAsDataURL(file)
+      ctx.drawImage(img, 0, 0, targetW, targetH)
+      const dataUrl = canvas.toDataURL("image/jpeg", quality)
+      const resizedFile = dataUrlToFile(dataUrl, file.name.replace(/\.(png|jpg|jpeg|webp)$/i, ".jpg"))
+      return { preview: dataUrl, file: resizedFile }
+    } finally {
+      URL.revokeObjectURL(imageUrl)
     }
   }, [])
 
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      const reader = new FileReader()
-      reader.onload = () => {
-        setUploadedImage(reader.result as string)
+  const applyFileToSlot = useCallback(
+    async (index: number, file: File) => {
+      if (!file.type.startsWith("image/")) return
+      try {
+        const resized = await resizeImageFile(file)
+        setUploadedImages((prev) => {
+          const next = [...prev]
+          next[index] = resized
+          return next
+        })
+      } catch {
+        const reader = new FileReader()
+        reader.onload = () => {
+          setUploadedImages((prev) => {
+            const next = [...prev]
+            next[index] = { preview: reader.result as string, file }
+            return next
+          })
+        }
+        reader.readAsDataURL(file)
       }
-      reader.readAsDataURL(file)
-    }
+    },
+    [resizeImageFile]
+  )
+
+  const handleDragOver = useCallback((index: number, e: React.DragEvent) => {
+    e.preventDefault()
+    setDraggingIndex(index)
   }, [])
+
+  const handleDragLeave = useCallback((index: number, e: React.DragEvent) => {
+    e.preventDefault()
+    setDraggingIndex((prev) => (prev === index ? null : prev))
+  }, [])
+
+  const handleDrop = useCallback(
+    (index: number, e: React.DragEvent) => {
+      e.preventDefault()
+      setDraggingIndex(null)
+      const file = e.dataTransfer.files[0]
+      if (file) {
+        applyFileToSlot(index, file)
+      }
+    },
+    [applyFileToSlot]
+  )
+
+  const handleFileSelect = useCallback(
+    (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]
+      if (file) {
+        applyFileToSlot(index, file)
+      }
+    },
+    [applyFileToSlot]
+  )
 
   const handleAnalyze = () => {
-    // Store data and navigate to analyzing page
-    router.push("/analysis/analyzing")
+    if (isSubmitting) return
+    setIsSubmitting(true)
+
+    try {
+      const globalStore = globalThis as typeof globalThis & {
+        __analysisPayload?: any
+        __analysisFiles?: (File | null)[]
+      }
+      globalStore.__analysisPayload = {
+        images: uploadedImages.map((slot) => slot.preview),
+        childInfo,
+        slots: slotConfigs.map((slot) => ({ label: slot.label, objectKey: slot.objectKey })),
+      }
+      globalStore.__analysisFiles = uploadedImages.map((slot) => slot.file)
+      router.push("/analysis/analyzing")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
+
+  const handleSaveDrawing = async (imageData: string) => {
+    const emptyIndex = uploadedImages.findIndex((image) => !image.preview)
+    const targetIndex = emptyIndex === -1 ? 0 : emptyIndex
+    const filename = `${slotConfigs[targetIndex]?.label || "drawing"}.png`
+    const file = dataUrlToFile(imageData, filename)
+    try {
+      const resized = await resizeImageFile(file)
+      setUploadedImages((prev) => {
+        const next = [...prev]
+        next[targetIndex] = resized
+        return next
+      })
+    } catch {
+      setUploadedImages((prev) => {
+        const next = [...prev]
+        next[targetIndex] = { preview: imageData, file }
+        return next
+      })
+    }
+    setInputMode("upload")
+  }
+
+  const hasAllImages = uploadedImages.every((slot) => slot.file && slot.preview)
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -111,72 +241,89 @@ export default function AnalysisPage() {
                     </TabsList>
                     
                     <TabsContent value="upload" className="mt-0">
-                      {!uploadedImage ? (
-                        <div
-                          className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
-                            isDragging
-                              ? "border-primary bg-primary/5"
-                              : "border-border hover:border-primary/50"
-                          }`}
-                          onDragOver={handleDragOver}
-                          onDragLeave={handleDragLeave}
-                          onDrop={handleDrop}
-                        >
-                          <div className="flex flex-col items-center gap-4">
-                            <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-                              <Upload className="h-8 w-8 text-primary" />
+                      <div className="grid gap-4 md:grid-cols-2">
+                        {uploadedImages.map((image, index) => {
+                          const inputId = `file-upload-${index}`
+                          const isDragging = draggingIndex === index
+                          const slot = slotConfigs[index]
+                          return (
+                            <div
+                              key={inputId}
+                              className={`border-2 border-dashed rounded-xl p-4 text-center transition-colors ${
+                                isDragging
+                                  ? "border-primary bg-primary/5"
+                                  : "border-border hover:border-primary/50"
+                              }`}
+                              onDragOver={(e) => handleDragOver(index, e)}
+                              onDragLeave={(e) => handleDragLeave(index, e)}
+                              onDrop={(e) => handleDrop(index, e)}
+                            >
+                              {image.preview ? (
+                                <div className="relative">
+                                  <img
+                                    src={image.preview}
+                                    alt={`${slot.label} 업로드`}
+                                    className="w-full rounded-lg border object-cover"
+                                  />
+                                  <div className="absolute left-2 top-2 rounded-full bg-background/90 px-2 py-0.5 text-xs font-medium text-foreground">
+                                    {index + 1}번 · {slot.label}
+                                  </div>
+                                  <Button
+                                    variant="destructive"
+                                    size="icon"
+                                    className="absolute top-2 right-2"
+                                    onClick={() =>
+                                      setUploadedImages((prev) => {
+                                        const next = [...prev]
+                                        next[index] = { preview: null, file: null }
+                                        return next
+                                      })
+                                    }
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <div className="flex flex-col items-center gap-3 py-6">
+                                  <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                                    <Upload className="h-6 w-6 text-primary" />
+                                  </div>
+                                  <div>
+                                    <p className="font-medium text-foreground mb-1">
+                                      {index + 1}번 · {slot.label}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                      드래그하거나 클릭해서 선택
+                                    </p>
+                                    <p className="mt-1 text-[11px] text-muted-foreground">
+                                      {slot.weightPath}
+                                    </p>
+                                  </div>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => handleFileSelect(index, e)}
+                                    className="hidden"
+                                    id={inputId}
+                                  />
+                                  <label htmlFor={inputId}>
+                                    <Button variant="outline" className="bg-transparent cursor-pointer" asChild>
+                                      <span>파일 선택</span>
+                                    </Button>
+                                  </label>
+                                </div>
+                              )}
                             </div>
-                            <div>
-                              <p className="font-medium text-foreground mb-1">
-                                이미지를 여기에 드래그하세요
-                              </p>
-                              <p className="text-sm text-muted-foreground">
-                                또는 클릭하여 파일을 선택하세요
-                              </p>
-                            </div>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={handleFileSelect}
-                              className="hidden"
-                              id="file-upload"
-                            />
-                            <label htmlFor="file-upload">
-                              <Button variant="outline" className="bg-transparent cursor-pointer" asChild>
-                                <span>파일 선택</span>
-                              </Button>
-                            </label>
-                            <p className="text-xs text-muted-foreground">
-                              지원 형식: JPG, PNG, HEIC (최대 10MB)
-                            </p>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="relative max-w-2xl mx-auto">
-                          <img
-                            src={uploadedImage || "/placeholder.svg"}
-                            alt="업로드된 그림"
-                            className="w-full rounded-xl border"
-                          />
-                          <Button
-                            variant="destructive"
-                            size="icon"
-                            className="absolute top-2 right-2"
-                            onClick={() => setUploadedImage(null)}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      )}
+                          )
+                        })}
+                      </div>
+                      <p className="mt-4 text-xs text-muted-foreground">
+                        지원 형식: JPG, PNG, HEIC (최대 10MB)
+                      </p>
                     </TabsContent>
                     
                     <TabsContent value="draw" className="mt-0">
-                      <DrawingCanvas
-                        onSave={(imageData) => {
-                          setUploadedImage(imageData)
-                          setInputMode("upload")
-                        }}
-                      />
+                      <DrawingCanvas onSave={handleSaveDrawing} />
                     </TabsContent>
                   </Tabs>
                 </CardContent>
@@ -246,9 +393,9 @@ export default function AnalysisPage() {
                       className="w-full gap-2"
                       size="lg"
                       onClick={handleAnalyze}
-                      disabled={!uploadedImage || !childInfo.age}
+                      disabled={!hasAllImages || !childInfo.age || isSubmitting}
                     >
-                      분석 시작하기
+                      {isSubmitting ? "분석 요청 중..." : "분석 시작하기"}
                       <ArrowRight className="h-4 w-4" />
                     </Button>
                   </div>
