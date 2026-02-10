@@ -2,7 +2,7 @@
 
 import React from "react"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Header } from "@/components/layout/header"
@@ -28,9 +28,47 @@ export default function AnalysisPage() {
     age: "",
     gender: "",
   })
+  const [selectedChildId, setSelectedChildId] = useState<string>("")
+  const [children, setChildren] = useState<{ id: number; name: string; age: number; gender: string }[]>([])
+  const [childrenLoading, setChildrenLoading] = useState(false)
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const token =
+      typeof window !== "undefined"
+        ? localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token")
+        : null
+    if (!token) return
+    setChildrenLoading(true)
+    fetch(`${apiBaseUrl}/children`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((list) => {
+        if (Array.isArray(list)) setChildren(list)
+      })
+      .catch(() => setChildren([]))
+      .finally(() => setChildrenLoading(false))
+  }, [apiBaseUrl])
+
+  const handleSelectChild = (childId: string) => {
+    setSelectedChildId(childId)
+    if (!childId) {
+      setChildInfo({ name: "", age: "", gender: "" })
+      return
+    }
+    const child = children.find((c) => c.id === parseInt(childId, 10))
+    if (child) {
+      setChildInfo({
+        name: child.name,
+        age: child.age.toString(),
+        gender: child.gender,
+      })
+    }
+  }
 
   const slotConfigs = [
     {
@@ -170,60 +208,27 @@ export default function AnalysisPage() {
       return
     }
 
-    try {
-      const formData = new FormData()
-      uploadedImages.forEach((slot, index) => {
-        const file = slot.file
-        if (file) {
-          formData.append(slotConfigs[index].objectKey, file)
-        }
-      })
-      formData.append("child_name", childInfo.name || "")
-      formData.append("child_age", childInfo.age || "")
-      formData.append("child_gender", childInfo.gender || "")
-
-      const response = await fetch("http://localhost:8080/analyze", {
-        method: "POST",
-        body: formData,
-      })
-      if (!response.ok) {
-        const detail = await response.text()
-        throw new Error(detail || "분석 요청 실패")
-      }
-      const data = await response.json()
-
-      const globalStore = globalThis as typeof globalThis & {
-        __analysisResponse?: any
-        __analysisImages?: string[]
-        __analysisBoxImages?: Record<string, string | null>
-      }
-
-      const imagePreviews = uploadedImages.map((slot) => slot.preview || "")
-      globalStore.__analysisResponse = data
-      globalStore.__analysisImages = imagePreviews
-      globalStore.__analysisBoxImages = {
-        tree: data?.results?.tree?.box_image_base64 || null,
-        house: data?.results?.house?.box_image_base64 || null,
-        man: data?.results?.man?.box_image_base64 || null,
-        woman: data?.results?.woman?.box_image_base64 || null,
-      }
-
-      const storageData = JSON.parse(JSON.stringify(data))
-      if (storageData?.results) {
-        Object.keys(storageData.results).forEach((key) => {
-          if (storageData.results[key]) {
-            storageData.results[key].box_image_base64 = null
-          }
-        })
-      }
-      sessionStorage.setItem("analysisResponse", JSON.stringify(storageData))
-      sessionStorage.setItem("analysisImages", JSON.stringify(imagePreviews))
-      router.push("/analysis/result")
-    } catch (err: any) {
-      setSubmitError(err?.message || "분석 요청 중 오류가 발생했습니다.")
-    } finally {
-      setIsSubmitting(false)
+    const imagePreviews = uploadedImages.map((slot) => slot.preview || "")
+    const payload = {
+      images: imagePreviews,
+      slots: slotConfigs.map((s) => ({ label: s.label, objectKey: s.objectKey })),
+      childInfo: {
+        name: childInfo.name || "",
+        age: childInfo.age || "",
+        gender: childInfo.gender || "",
+      },
     }
+    const files = uploadedImages.map((slot) => slot.file)
+
+    const globalStore = globalThis as typeof globalThis & {
+      __analysisPayload?: typeof payload
+      __analysisFiles?: (File | null)[]
+    }
+    globalStore.__analysisPayload = payload
+    globalStore.__analysisFiles = files
+
+    setIsSubmitting(false)
+    router.push("/analysis/analyzing")
   }
 
   const handleSaveDrawing = async (imageData: string) => {
@@ -390,10 +395,32 @@ export default function AnalysisPage() {
                     아이 정보 입력
                   </CardTitle>
                   <CardDescription>
-                    정확한 분석을 위해 아이의 정보를 입력해주세요
+                    등록한 아이를 선택하거나 직접 입력해주세요
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {children.length > 0 && (
+                    <div className="space-y-2">
+                      <Label>아이를 선택하세요</Label>
+                      <Select
+                        value={selectedChildId}
+                        onValueChange={handleSelectChild}
+                        disabled={childrenLoading}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder={childrenLoading ? "불러오는 중..." : "아이를 선택하세요 (또는 직접 입력)"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">직접 입력</SelectItem>
+                          {children.map((child) => (
+                            <SelectItem key={child.id} value={child.id.toString()}>
+                              {child.name} ({child.age}세, {child.gender === "male" ? "남아" : "여아"})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   <div className="grid gap-4 md:grid-cols-3">
                     <div className="space-y-2">
                       <Label htmlFor="name">아이 이름 (별명)</Label>
@@ -401,7 +428,10 @@ export default function AnalysisPage() {
                         id="name"
                         placeholder="예: 민준이"
                         value={childInfo.name}
-                        onChange={(e) => setChildInfo({ ...childInfo, name: e.target.value })}
+                        onChange={(e) => {
+                          setSelectedChildId("")
+                          setChildInfo({ ...childInfo, name: e.target.value })
+                        }}
                       />
                     </div>
 
@@ -409,7 +439,10 @@ export default function AnalysisPage() {
                       <Label htmlFor="age">나이</Label>
                       <Select
                         value={childInfo.age}
-                        onValueChange={(value) => setChildInfo({ ...childInfo, age: value })}
+                        onValueChange={(value) => {
+                          setSelectedChildId("")
+                          setChildInfo({ ...childInfo, age: value })
+                        }}
                       >
                         <SelectTrigger className="w-full">
                           <SelectValue placeholder="나이 선택" />
@@ -428,7 +461,10 @@ export default function AnalysisPage() {
                       <Label htmlFor="gender">성별</Label>
                       <Select
                         value={childInfo.gender}
-                        onValueChange={(value) => setChildInfo({ ...childInfo, gender: value })}
+                        onValueChange={(value) => {
+                          setSelectedChildId("")
+                          setChildInfo({ ...childInfo, gender: value })
+                        }}
                       >
                         <SelectTrigger className="w-full">
                           <SelectValue placeholder="성별 선택" />

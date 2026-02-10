@@ -6,6 +6,9 @@ import { Progress } from "@/components/ui/progress"
 import { Card, CardContent } from "@/components/ui/card"
 import { Sparkles, Brain, Users, FileText, Lightbulb } from "lucide-react"
 
+const aimodelsBaseUrl = process.env.NEXT_PUBLIC_AIMODELS_BASE_URL ?? "http://localhost:8080"
+const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
+
 const analysisSteps = [
   { id: 1, label: "구성요소 분석 중...", icon: Sparkles, tip: "아이들은 그림을 통해 언어로 표현하기 어려운 감정을 나타내요." },
   { id: 2, label: "발달 단계 평가 중...", icon: Brain, tip: "그림의 크기와 위치는 아이의 자신감과 관련이 있을 수 있어요." },
@@ -95,7 +98,7 @@ export default function AnalyzingPage() {
     formData.append("child_age", childInfo.age || "")
     formData.append("child_gender", childInfo.gender || "")
 
-    fetch("http://localhost:8080/analyze", {
+    fetch(`${aimodelsBaseUrl}/analyze`, {
       method: "POST",
       body: formData,
     })
@@ -106,7 +109,7 @@ export default function AnalyzingPage() {
         }
         return response.json()
       })
-      .then((data) => {
+      .then(async (data) => {
         const globalStore = globalThis as typeof globalThis & {
           __analysisResponse?: any
           __analysisImages?: string[]
@@ -124,7 +127,7 @@ export default function AnalyzingPage() {
 
         const storageData = JSON.parse(JSON.stringify(data))
         if (storageData?.results) {
-          Object.keys(storageData.results).forEach((key) => {
+          Object.keys(storageData.results).forEach((key: string) => {
             if (storageData.results[key]) {
               storageData.results[key].box_image_base64 = null
             }
@@ -132,6 +135,58 @@ export default function AnalyzingPage() {
         }
         sessionStorage.setItem("analysisResponse", JSON.stringify(storageData))
         setProgress(100)
+
+        // MongoDB 저장: 로그인 유저면 BackEnd /analysis/save 호출
+        const token =
+          typeof window !== "undefined"
+            ? localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token")
+            : null
+        if (token) {
+          try {
+            const meRes = await fetch(`${apiBaseUrl}/auth/me`, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${token}` },
+            })
+            if (meRes.ok) {
+              const meData = await meRes.json()
+              const userId = meData.id
+              if (userId != null) {
+                const results = data?.results || {}
+                const imageToJson = {
+                  tree: results.tree?.image_json ?? {},
+                  house: results.house?.image_json ?? {},
+                  man: results.man?.image_json ?? {},
+                  woman: results.woman?.image_json ?? {},
+                }
+                const jsonToLlmJson = {
+                  tree: results.tree?.analysis ?? {},
+                  house: results.house?.analysis ?? {},
+                  man: results.man?.analysis ?? {},
+                  woman: results.woman?.analysis ?? {},
+                }
+                const llmResultText: Record<string, unknown> = {}
+                ;(["tree", "house", "man", "woman"] as const).forEach((k) => {
+                  const interp = results[k]?.interpretation
+                  if (interp != null) llmResultText[k] = interp
+                })
+                await fetch(`${apiBaseUrl}/analysis/save`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    user_id: userId,
+                    image_to_json: imageToJson,
+                    json_to_llm_json: jsonToLlmJson,
+                    llm_result_text: Object.keys(llmResultText).length > 0 ? llmResultText : null,
+                    ocr_json: {},
+                  }),
+                })
+              }
+            }
+          } catch {
+            // 저장 실패해도 결과 화면은 그대로 이동
+          }
+        }
+
         setTimeout(() => {
           router.push("/analysis/result")
         }, 500)
