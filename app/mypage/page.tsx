@@ -47,7 +47,7 @@ import {
 } from "@/components/ui/select";
 import Link from "next/link";
 
-/** API 분석 로그 한 건 (MongoDB analysis_logs) */
+/** API 분석 로그 한 건 (MongoDB analysis_logs) - 레거시 */
 export interface AnalysisLogItem {
   id: string;
   user_id: number;
@@ -56,6 +56,18 @@ export interface AnalysisLogItem {
   json_to_llm_json: Record<string, unknown>;
   llm_result_text: Record<string, unknown> | null;
   ocr_json: Record<string, unknown>;
+}
+
+/** 그림 분석 1건 (MongoDB drawing_analyses) */
+export interface DrawingAnalysisItem {
+  id: string;
+  user_id: number;
+  child_info: { name?: string; age?: string; gender?: string };
+  created_at: string;
+  element_analysis: Record<string, unknown>;
+  analyzed_image_urls: Record<string, string>;
+  psychological_interpretation: Record<string, { interpretation?: unknown; analysis?: unknown }>;
+  comparison: Record<string, unknown>;
 }
 
 interface AnalysisHistory {
@@ -68,6 +80,7 @@ interface AnalysisHistory {
   overallScore: number;
   status: "완료" | "분석중";
   rawLog?: AnalysisLogItem;
+  rawDrawing?: DrawingAnalysisItem;
 }
 
 /** 등록된 아이 */
@@ -79,21 +92,26 @@ export interface ChildItem {
   created_at: string | null;
 }
 
-function mapLogToHistory(log: AnalysisLogItem): AnalysisHistory {
-  const created = log.created_at ? new Date(log.created_at) : new Date();
+function mapDrawingToHistory(d: DrawingAnalysisItem): AnalysisHistory {
+  const created = d.created_at ? new Date(d.created_at) : new Date();
   const dateStr = Number.isNaN(created.getTime())
     ? "-"
     : `${created.getFullYear()}.${String(created.getMonth() + 1).padStart(2, "0")}.${String(created.getDate()).padStart(2, "0")}`;
+  const child = d.child_info || {};
+  const score = typeof (d.comparison as { overall_score?: number })?.overall_score === "number"
+    ? (d.comparison as { overall_score: number }).overall_score
+    : 0;
+  const firstUrl = d.analyzed_image_urls?.tree || d.analyzed_image_urls?.house || "/placeholder.svg";
   return {
-    id: log.id,
+    id: d.id,
     date: dateStr,
-    childName: "-",
-    childAge: "-",
+    childName: (child.name as string) || "-",
+    childAge: (child.age as string) || "-",
     drawingType: "HTP 그림 분석",
-    thumbnail: "/placeholder.svg",
-    overallScore: 0,
+    thumbnail: firstUrl,
+    overallScore: score,
     status: "완료",
-    rawLog: log,
+    rawDrawing: d,
   };
 }
 
@@ -143,8 +161,8 @@ export default function MyPage() {
     created_at: "",
   });
   const [userId, setUserId] = useState<number | null>(null);
-  const [analysisLogs, setAnalysisLogs] = useState<AnalysisLogItem[]>([]);
-  const [analysisLogsLoading, setAnalysisLogsLoading] = useState(false);
+  const [drawingAnalyses, setDrawingAnalyses] = useState<DrawingAnalysisItem[]>([]);
+  const [drawingAnalysesLoading, setDrawingAnalysesLoading] = useState(false);
   const [children, setChildren] = useState<ChildItem[]>([]);
   const [childrenLoading, setChildrenLoading] = useState(false);
   const [addChildOpen, setAddChildOpen] = useState(false);
@@ -158,17 +176,40 @@ export default function MyPage() {
     process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
   const analysisHistoryList: AnalysisHistory[] =
-    analysisLogs.map(mapLogToHistory);
+    drawingAnalyses.map(mapDrawingToHistory);
+
+  const selectedChild = children.find((c) => c.id === selectedChildId) || null;
+
+  /** 선택된 아이에 해당하는 분석만 필터링 (child_info.name, age, gender 매칭) */
+  const filteredAnalysisHistoryList =
+    selectedChildId && selectedChild
+      ? analysisHistoryList.filter((a) => {
+          const ci = a.rawDrawing?.child_info || {};
+          const nameMatch = (ci.name as string) === selectedChild.name;
+          const ageMatch =
+            String(ci.age) === String(selectedChild.age);
+          const genderMatch =
+            (ci.gender as string) === selectedChild.gender ||
+            (ci.gender === "남" && selectedChild.gender === "male") ||
+            (ci.gender === "여" && selectedChild.gender === "female");
+          return nameMatch && ageMatch && genderMatch;
+        })
+      : analysisHistoryList;
+
   const totalHistoryPages = Math.max(
     1,
-    Math.ceil(analysisHistoryList.length / ITEMS_PER_PAGE),
+    Math.ceil(filteredAnalysisHistoryList.length / ITEMS_PER_PAGE),
   );
-  const paginatedHistory = analysisHistoryList.slice(
+  const paginatedHistory = filteredAnalysisHistoryList.slice(
     (historyPage - 1) * ITEMS_PER_PAGE,
     historyPage * ITEMS_PER_PAGE,
   );
 
-  const selectedChild = children.find((c) => c.id === selectedChildId) || null;
+  const handleSelectChild = (childId: number) => {
+    setSelectedChildId(childId);
+    setActiveTab("history");
+    setHistoryPage(1);
+  };
 
   const resolveProfileImageUrl = (value?: string | null) => {
     if (!value || value === "base") return null;
@@ -193,25 +234,24 @@ export default function MyPage() {
     return trimmed;
   };
 
-  const handleViewAnalysis = (log: AnalysisLogItem) => {
+  const handleViewDrawingAnalysis = (doc: DrawingAnalysisItem) => {
+    const labels = {
+      tree: "나무",
+      house: "집",
+      man: "남자사람",
+      woman: "여자사람",
+    } as const;
     const results = (["tree", "house", "man", "woman"] as const).reduce(
       (acc, key) => {
-        const analysis =
-          (log.json_to_llm_json?.[key] as Record<string, unknown>) || {};
+        const psych = doc.psychological_interpretation?.[key] || {};
+        const interp = psych.interpretation;
+        const analysis = psych.analysis;
         acc[key] = {
-          label:
-            key === "tree"
-              ? "나무"
-              : key === "house"
-                ? "집"
-                : key === "man"
-                  ? "남자사람"
-                  : "여자사람",
-          image_json:
-            (log.image_to_json?.[key] as Record<string, unknown>) || {},
-          interpretation: analysis,
-          analysis,
-          box_image_base64: null,
+          label: labels[key],
+          image_json: (doc.element_analysis?.[key] as Record<string, unknown>) || {},
+          interpretation: interp,
+          analysis: analysis || interp,
+          box_image_base64: doc.analyzed_image_urls?.[key] || null,
           metrics: {},
         };
         return acc;
@@ -220,9 +260,9 @@ export default function MyPage() {
     );
     const response = {
       success: true,
-      child: { name: "-", age: "-", gender: "" },
+      child: doc.child_info || { name: "-", age: "-", gender: "" },
       results,
-      comparison: {},
+      comparison: doc.comparison || {},
     };
     const globalStore = globalThis as typeof globalThis & {
       __analysisResponse?: unknown;
@@ -232,10 +272,10 @@ export default function MyPage() {
     globalStore.__analysisResponse = response;
     globalStore.__analysisImages = [];
     globalStore.__analysisBoxImages = {
-      tree: null,
-      house: null,
-      man: null,
-      woman: null,
+      tree: doc.analyzed_image_urls?.tree || null,
+      house: doc.analyzed_image_urls?.house || null,
+      man: doc.analyzed_image_urls?.man || null,
+      woman: doc.analyzed_image_urls?.woman || null,
     };
     try {
       sessionStorage.setItem("analysisResponse", JSON.stringify(response));
@@ -389,21 +429,31 @@ export default function MyPage() {
 
   useEffect(() => {
     if (userId == null) {
-      setAnalysisLogs([]);
+      setDrawingAnalyses([]);
+      return;
+    }
+    const token =
+      typeof window !== "undefined"
+        ? localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token")
+        : null;
+    if (!token) {
+      setDrawingAnalyses([]);
       return;
     }
     let cancelled = false;
-    setAnalysisLogsLoading(true);
-    fetch(`${apiBaseUrl}/analysis/${userId}`)
+    setDrawingAnalysesLoading(true);
+    fetch(`${apiBaseUrl}/drawing-analyses?user_id=${userId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
       .then((res) => (res.ok ? res.json() : []))
-      .then((list: AnalysisLogItem[]) => {
-        if (!cancelled && Array.isArray(list)) setAnalysisLogs(list);
+      .then((list: DrawingAnalysisItem[]) => {
+        if (!cancelled && Array.isArray(list)) setDrawingAnalyses(list);
       })
       .catch(() => {
-        if (!cancelled) setAnalysisLogs([]);
+        if (!cancelled) setDrawingAnalyses([]);
       })
       .finally(() => {
-        if (!cancelled) setAnalysisLogsLoading(false);
+        if (!cancelled) setDrawingAnalysesLoading(false);
       });
     return () => {
       cancelled = true;
@@ -621,7 +671,7 @@ export default function MyPage() {
                   return (
                     <button
                       key={child.id}
-                      onClick={() => setSelectedChildId(child.id)}
+                      onClick={() => handleSelectChild(child.id)}
                       className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all duration-200 shrink-0 ${
                         isSelected
                           ? "border-teal-500 bg-teal-50"
@@ -731,7 +781,9 @@ export default function MyPage() {
                         <FileText className="h-4 w-4 text-teal-600" />
                       </div>
                       <p className="text-2xl font-bold text-slate-800">
-                        {analysisHistoryList.length}
+                        {selectedChild
+                          ? filteredAnalysisHistoryList.length
+                          : analysisHistoryList.length}
                       </p>
                       <p className="text-xs text-slate-500 mt-0.5">총 분석</p>
                     </div>
@@ -828,27 +880,39 @@ export default function MyPage() {
                   </Button>
                 </div>
                 <div className="space-y-3">
-                  {analysisHistoryList.slice(0, 3).map((analysis, index) => (
+                  {(selectedChild
+                    ? filteredAnalysisHistoryList
+                    : analysisHistoryList
+                  )
+                    .slice(0, 3)
+                    .map((analysis, index) => (
                     <AnalysisCard
                       key={analysis.id}
                       analysis={analysis}
                       delay={600 + index * 100}
                       isVisible={isVisible}
                       onView={
-                        analysis.rawLog
-                          ? () => handleViewAnalysis(analysis.rawLog!)
+                        analysis.rawDrawing
+                          ? () => handleViewDrawingAnalysis(analysis.rawDrawing!)
                           : undefined
                       }
                     />
                   ))}
-                  {analysisLogsLoading && analysisHistoryList.length === 0 && (
+                  {drawingAnalysesLoading &&
+                    (selectedChild
+                      ? filteredAnalysisHistoryList
+                      : analysisHistoryList
+                    ).length === 0 && (
                     <p className="text-sm text-slate-500 py-4">
                       분석 기록 불러오는 중...
                     </p>
                   )}
-                  {!analysisLogsLoading &&
+                  {!drawingAnalysesLoading &&
                     userId != null &&
-                    analysisHistoryList.length === 0 && (
+                    (selectedChild
+                      ? filteredAnalysisHistoryList
+                      : analysisHistoryList
+                    ).length === 0 && (
                       <div className="text-center py-12 bg-slate-50 rounded-2xl">
                         <Palette className="h-12 w-12 mx-auto mb-3 text-slate-300" />
                         <p className="text-sm text-slate-500">
@@ -880,7 +944,7 @@ export default function MyPage() {
                       : "분석 기록"}
                   </h2>
                   <p className="text-sm text-slate-500 mt-1">
-                    총 {analysisHistoryList.length}건의 분석 기록
+                    총 {filteredAnalysisHistoryList.length}건의 분석 기록
                   </p>
                 </div>
                 <Link href="/analysis">
@@ -889,7 +953,7 @@ export default function MyPage() {
                   </Button>
                 </Link>
               </div>
-              {analysisLogsLoading ? (
+              {drawingAnalysesLoading ? (
                 <p className="text-sm text-slate-500 py-8">
                   분석 기록 불러오는 중...
                 </p>
@@ -897,7 +961,7 @@ export default function MyPage() {
                 <p className="text-sm text-slate-500 py-8">
                   로그인하면 분석 기록을 볼 수 있어요.
                 </p>
-              ) : analysisHistoryList.length === 0 ? (
+              ) : filteredAnalysisHistoryList.length === 0 ? (
                 <div className="text-center py-16 bg-slate-50 rounded-2xl">
                   <Palette className="h-14 w-14 mx-auto mb-4 text-slate-300" />
                   <p className="font-medium text-slate-600">
@@ -924,8 +988,8 @@ export default function MyPage() {
                         delay={index * 100}
                         isVisible={true}
                         onView={
-                          analysis.rawLog
-                            ? () => handleViewAnalysis(analysis.rawLog!)
+                          analysis.rawDrawing
+                            ? () => handleViewDrawingAnalysis(analysis.rawDrawing!)
                             : undefined
                         }
                       />

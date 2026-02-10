@@ -136,7 +136,7 @@ export default function AnalyzingPage() {
         sessionStorage.setItem("analysisResponse", JSON.stringify(storageData))
         setProgress(100)
 
-        // MongoDB 저장: 로그인 유저면 BackEnd /analysis/save 호출
+        // MongoDB + S3 저장: 로그인 유저면 BackEnd /drawing-analyses 호출
         const token =
           typeof window !== "undefined"
             ? localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token")
@@ -152,32 +152,38 @@ export default function AnalyzingPage() {
               const userId = meData.id
               if (userId != null) {
                 const results = data?.results || {}
-                const imageToJson = {
+                const elementAnalysis = {
                   tree: results.tree?.image_json ?? {},
                   house: results.house?.image_json ?? {},
                   man: results.man?.image_json ?? {},
                   woman: results.woman?.image_json ?? {},
                 }
-                const jsonToLlmJson = {
-                  tree: results.tree?.analysis ?? {},
-                  house: results.house?.analysis ?? {},
-                  man: results.man?.analysis ?? {},
-                  woman: results.woman?.analysis ?? {},
+                const boxImagesBase64: Record<string, string | null> = {
+                  tree: results.tree?.box_image_base64 ?? null,
+                  house: results.house?.box_image_base64 ?? null,
+                  man: results.man?.box_image_base64 ?? null,
+                  woman: results.woman?.box_image_base64 ?? null,
                 }
-                const llmResultText: Record<string, unknown> = {}
+                const psychologicalInterpretation: Record<string, { interpretation?: unknown; analysis?: unknown }> = {}
                 ;(["tree", "house", "man", "woman"] as const).forEach((k) => {
-                  const interp = results[k]?.interpretation
-                  if (interp != null) llmResultText[k] = interp
+                  psychologicalInterpretation[k] = {
+                    interpretation: results[k]?.interpretation,
+                    analysis: results[k]?.analysis,
+                  }
                 })
-                await fetch(`${apiBaseUrl}/analysis/save`, {
+                await fetch(`${apiBaseUrl}/drawing-analyses`, {
                   method: "POST",
-                  headers: { "Content-Type": "application/json" },
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                  },
                   body: JSON.stringify({
                     user_id: userId,
-                    image_to_json: imageToJson,
-                    json_to_llm_json: jsonToLlmJson,
-                    llm_result_text: Object.keys(llmResultText).length > 0 ? llmResultText : null,
-                    ocr_json: {},
+                    child_info: data?.child || {},
+                    element_analysis: elementAnalysis,
+                    box_images_base64: boxImagesBase64,
+                    psychological_interpretation: psychologicalInterpretation,
+                    comparison: data?.comparison || {},
                   }),
                 })
               }

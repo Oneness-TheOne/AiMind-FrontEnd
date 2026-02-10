@@ -54,9 +54,11 @@ export default function AnalysisPage() {
       .finally(() => setChildrenLoading(false))
   }, [apiBaseUrl])
 
+  const DIRECT_INPUT_VALUE = "__direct__"
   const handleSelectChild = (childId: string) => {
-    setSelectedChildId(childId)
-    if (!childId) {
+    const isDirect = childId === DIRECT_INPUT_VALUE || !childId
+    setSelectedChildId(isDirect ? "" : childId)
+    if (isDirect) {
       setChildInfo({ name: "", age: "", gender: "" })
       return
     }
@@ -403,7 +405,7 @@ export default function AnalysisPage() {
                     <div className="space-y-2">
                       <Label>아이를 선택하세요</Label>
                       <Select
-                        value={selectedChildId}
+                        value={selectedChildId || DIRECT_INPUT_VALUE}
                         onValueChange={handleSelectChild}
                         disabled={childrenLoading}
                       >
@@ -411,7 +413,7 @@ export default function AnalysisPage() {
                           <SelectValue placeholder={childrenLoading ? "불러오는 중..." : "아이를 선택하세요 (또는 직접 입력)"} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">직접 입력</SelectItem>
+                          <SelectItem value={DIRECT_INPUT_VALUE}>직접 입력</SelectItem>
                           {children.map((child) => (
                             <SelectItem key={child.id} value={child.id.toString()}>
                               {child.name} ({child.age}세, {child.gender === "male" ? "남아" : "여아"})

@@ -27,7 +27,7 @@ const analysisWelcomeMessage: Message = {
   id: "1",
   role: "assistant",
   content:
-    "해석 결과에 대해 추가 설명이 필요하시면 말씀해 주세요. 종합 점수, 발달 단계, 감정 해석 중 궁금한 항목을 알려주시면 쉽게 풀어 설명해 드릴게요.",
+    "해석 결과에 대해 추가 설명이 필요하시면 말씀해 주세요. '결과에서는 자신감이 부족하다고 나왔는데, 우리 아이는 오히려 자신감이 넘쳐요. 왜 그럴 수 있나요?'처럼 분석과 실제가 다를 때의 궁금증도 편하게 물어보세요.",
   timestamp: new Date(),
 }
 
@@ -43,9 +43,54 @@ const analysisResponses = [
   "종합 점수는 여러 요소(구성요소, 색상 사용, 공간 활용, 표현력)를 종합해 산출한 지표입니다. 점수가 높을수록 전반적인 표현이 안정적이라는 의미예요.",
   "발달 단계 평가는 연령대 평균과 비교한 지표로, 또래 대비 어떤 부분이 강점/보완인지 알려줍니다. 궁금한 항목을 지정해 주세요.",
   "감정 상태 해석은 색상·크기·배치와 같은 표현 특성을 기반으로 합니다. 특정 색상이나 요소의 의미가 궁금하시면 알려 주세요.",
-  "구성요소 분석에서 '미감지'로 표시된 항목은 그림에 명확한 형태가 없었을 가능성이 있어요. 아이의 의도나 이야기와 함께 보시면 좋아요.",
+  "그림 검사는 그 순간의 표현을 바탕으로 한 참고 지표예요. 일상에서 보이는 모습과 다를 수 있으며, 그 차이에 대한 이유도 설명해 드릴 수 있어요.",
   "추가 설명이 필요한 결과 항목을 콕 집어 말씀해 주시면 그 부분을 더 자세히 풀어드릴게요.",
 ]
+
+/** 결과 페이지에서 sessionStorage/globalThis에 저장된 분석 결과를 읽어 챗봇용 컨텍스트로 변환합니다. */
+function getAnalysisContextForChatbot(): Record<string, unknown> | null {
+  if (typeof window === "undefined") return null
+  const g = globalThis as typeof globalThis & { __analysisResponse?: unknown }
+  let raw: unknown = g.__analysisResponse
+  if (!raw) {
+    try {
+      const s = sessionStorage.getItem("analysisResponse")
+      raw = s ? JSON.parse(s) : null
+    } catch {
+      raw = null
+    }
+  }
+  if (!raw || typeof raw !== "object") return null
+  const response = raw as Record<string, unknown>
+  const child = (response.child as Record<string, unknown>) || {}
+  const results = (response.results as Record<string, unknown>) || {}
+  const comparison = (response.comparison as Record<string, unknown>) || {}
+  const psych = (comparison.psychology as Record<string, unknown>)?.scores as Record<string, number> | undefined
+  const treeInterp = (results.tree as Record<string, unknown>)?.interpretation as Record<string, unknown> | undefined
+  const houseInterp = (results.house as Record<string, unknown>)?.interpretation as Record<string, unknown> | undefined
+  const manInterp = (results.man as Record<string, unknown>)?.interpretation as Record<string, unknown> | undefined
+  const womanInterp = (results.woman as Record<string, unknown>)?.interpretation as Record<string, unknown> | undefined
+  const getSummary = (v: unknown): string | undefined => {
+    if (typeof v === "string") return v
+    if (v && typeof v === "object" && "내용" in v) return (v as { 내용: string }).내용
+    return undefined
+  }
+  const summary =
+    getSummary(treeInterp?.전체_요약) ??
+    getSummary(houseInterp?.전체_요약) ??
+    getSummary(manInterp?.전체_요약) ??
+    getSummary(womanInterp?.전체_요약)
+  return {
+    childName: child.name ?? "아이",
+    age: child.age ?? "-",
+    overallScore: comparison.overall_score ?? 0,
+    summary: summary ?? "",
+    developmentStage: (comparison.development as Record<string, unknown>)?.stage ?? "",
+    emotionalState: "",
+    psychologyScores: psych ?? undefined,
+    interpretations: results,
+  }
+}
 
 export function ChatbotModal() {
   const pathname = usePathname()
@@ -92,10 +137,17 @@ export function ChatbotModal() {
     setIsLoading(true)
 
     try {
+      const body: { question: string; analysis_context?: Record<string, unknown> } = {
+        question: userMessage.content,
+      }
+      if (isAnalysisResult) {
+        const analysisContext = getAnalysisContextForChatbot()
+        if (analysisContext) body.analysis_context = analysisContext
+      }
       const response = await fetch(`${chatbotBaseUrl}/chatbot`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: userMessage.content }),
+        body: JSON.stringify(body),
       })
       if (!response.ok) {
         throw new Error("챗봇 응답 실패")

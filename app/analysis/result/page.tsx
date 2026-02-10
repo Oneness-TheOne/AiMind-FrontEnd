@@ -50,14 +50,84 @@ import {
   Legend,
 } from "recharts"
 
-const detectedElements = [
-  { name: "집", detected: true, note: "안정적인 형태, 굴뚝에서 연기 표현" },
-  { name: "나무", detected: true, note: "풍성한 나뭇잎, 굵은 줄기" },
-  { name: "사람", detected: true, note: "표정 표현, 팔다리 완성" },
-  { name: "태양", detected: true, note: "밝은 색상, 크게 표현" },
-  { name: "구름", detected: false, note: "미표현" },
-  { name: "꽃/풀", detected: true, note: "지면에 풀 표현" },
-]
+const OBJECT_KEYS = ["tree", "house", "man", "woman"] as const
+const OBJECT_LABELS: Record<string, string> = {
+  tree: "나무",
+  house: "집",
+  man: "남자사람",
+  woman: "여자사람",
+}
+
+/** HTP 해석에 꼭 필요한 핵심 요소만 (나머지 필터링) */
+const ESSENTIAL_ELEMENTS: Record<string, Set<string>> = {
+  tree: new Set(["나무전체", "수관", "기둥", "가지", "뿌리"]),
+  house: new Set(["집전체", "지붕", "집벽", "문", "창문", "굴뚝"]),
+  man: new Set(["사람전체", "머리", "얼굴", "눈", "코", "입", "상체", "팔", "다리"]),
+  woman: new Set(["사람전체", "머리", "얼굴", "눈", "코", "입", "상체", "팔", "다리"]),
+}
+
+/** image_json(RAG 포맷)에서 구성요소 목록 추출 - 핵심 요소만 */
+function getComponentElementsFromImageJson(
+  imageJson: Record<string, unknown> | undefined,
+  objectKey: string
+): { name: string; detected: boolean; note: string }[] {
+  if (!imageJson) return []
+
+  const features = imageJson.features as Record<string, { has?: number; ratio?: number; center_x?: number; center_y?: number; confidence?: number }> | undefined
+  const detectedKr = (imageJson.detected_classes_kr as string[]) || []
+  const summary = (imageJson.summary as string) || ""
+
+  if (features) {
+    const essential = ESSENTIAL_ELEMENTS[objectKey]
+    const detectedSet = new Set(detectedKr)
+    return Object.entries(features)
+      .filter(([name]) => !essential || essential.has(name))
+      .map(([name, val]) => {
+        const has = val?.has === 1
+        const ratio = val?.ratio ?? 0
+        const cx = val?.center_x ?? -1
+        const pos =
+          cx >= 0
+            ? cx < 0.4
+              ? "왼쪽"
+              : cx > 0.6
+                ? "오른쪽"
+                : "가운데"
+            : ""
+        const note =
+          has && ratio > 0
+            ? `면적 약 ${(ratio * 100).toFixed(1)}%${pos ? `, ${pos} 위치` : ""}`
+            : has
+              ? "감지됨"
+              : "미감지"
+        return {
+          name,
+          detected: has || detectedSet.has(name),
+          note: note.trim() || (has ? "감지됨" : "미감지"),
+        }
+      })
+  }
+
+  const bbox = (imageJson.annotations as { bbox?: { label: string }[] })?.bbox
+  if (Array.isArray(bbox)) {
+    const essential = ESSENTIAL_ELEMENTS[objectKey]
+    return bbox
+      .map((b) => b?.label)
+      .filter((l): l is string => !!l)
+      .filter((l, i, arr) => arr.indexOf(l) === i)
+      .filter((label) => !essential || essential.has(label))
+      .map((label) => ({
+        name: label,
+        detected: true,
+        note: "감지됨",
+      }))
+  }
+
+  if (summary) {
+    return [{ name: OBJECT_LABELS[objectKey] || objectKey, detected: true, note: summary }]
+  }
+  return []
+}
 
 const defaultPsychologyData = [
   { name: "자아 존중감", score: 85, max: 100 },
@@ -282,30 +352,40 @@ export default function ResultPage() {
     }
   }, [])
 
+  const objectKey = OBJECT_KEYS[activeImageIndex] ?? "tree"
+
+  const componentElements = useMemo(() => {
+    const imgData = interpretations[objectKey]?.image_json
+    return getComponentElementsFromImageJson(
+      imgData as Record<string, unknown> | undefined,
+      objectKey
+    )
+  }, [interpretations, objectKey])
+
   const analysisImages = useMemo(
     () => [
       {
         label: "나무",
-        preview: boxImages.tree || imagePreviews[0],
+        preview: boxImages.tree ?? null,
         badgeClass: "bg-accent/20 text-accent-foreground",
       },
       {
         label: "집",
-        preview: boxImages.house || imagePreviews[1],
+        preview: boxImages.house ?? null,
         badgeClass: "bg-primary/20 text-primary",
       },
       {
         label: "남자사람",
-        preview: boxImages.man || imagePreviews[2],
+        preview: boxImages.man ?? null,
         badgeClass: "bg-chart-4/20 text-chart-4",
       },
       {
         label: "여자사람",
-        preview: boxImages.woman || imagePreviews[3],
+        preview: boxImages.woman ?? null,
         badgeClass: "bg-chart-3/20 text-chart-3",
       },
     ],
-    [boxImages, imagePreviews]
+    [boxImages]
   )
 
   return (
@@ -453,51 +533,62 @@ export default function ResultPage() {
                   </CardContent>
                 </Card>
 
-                {/* Detected Elements */}
+                {/* Detected Elements - 선택한 이미지(tree/집/남자/여자)에 따라 동적 표시 */}
                 <Card>
                   <CardHeader>
                     <CardTitle>구성요소 분석</CardTitle>
                     <CardDescription>
-                      그림에서 감지된 요소들과 특징입니다
+                      {analysisImages[activeImageIndex]?.label || "그림"}에서 감지된 요소들과 특징입니다
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">
-                      {detectedElements.map((element) => (
-                        <div
-                          key={element.name}
-                          className={`flex items-center gap-3 p-3 rounded-lg ${
-                            element.detected ? "bg-primary/5" : "bg-muted/50"
-                          }`}
-                        >
+                      {componentElements.length > 0 ? (
+                        componentElements.map((element) => (
                           <div
-                            className={`h-8 w-8 rounded-full flex items-center justify-center ${
-                              element.detected
-                                ? "bg-primary/10 text-primary"
-                                : "bg-muted text-muted-foreground"
+                            key={element.name}
+                            className={`flex items-center gap-3 p-3 rounded-lg ${
+                              element.detected ? "bg-primary/5" : "bg-muted/50"
                             }`}
                           >
-                            {element.name === "집" && <Home className="h-4 w-4" />}
-                            {element.name === "나무" && <TreeDeciduous className="h-4 w-4" />}
-                            {element.name === "사람" && <User className="h-4 w-4" />}
-                            {element.name === "태양" && <span className="text-sm">☀</span>}
-                            {element.name === "구름" && <span className="text-sm">☁</span>}
-                            {element.name === "꽃/풀" && <span className="text-sm">🌱</span>}
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-foreground">{element.name}</span>
-                              <Badge
-                                variant={element.detected ? "default" : "secondary"}
-                                className={element.detected ? "bg-primary" : ""}
-                              >
-                                {element.detected ? "감지됨" : "미감지"}
-                              </Badge>
+                            <div
+                              className={`h-8 w-8 rounded-full flex items-center justify-center ${
+                                element.detected
+                                  ? "bg-primary/10 text-primary"
+                                  : "bg-muted text-muted-foreground"
+                              }`}
+                            >
+                              {element.name.includes("집") && <Home className="h-4 w-4" />}
+                              {element.name.includes("나무") && <TreeDeciduous className="h-4 w-4" />}
+                              {element.name.includes("사람") && <User className="h-4 w-4" />}
+                              {element.name.includes("태양") && <span className="text-sm">☀</span>}
+                              {element.name.includes("구름") && <span className="text-sm">☁</span>}
+                              {element.name.includes("꽃") && <span className="text-sm">🌱</span>}
+                              {element.name.includes("머리") || element.name.includes("얼굴") ? (
+                                <User className="h-4 w-4" />
+                              ) : (
+                                <Layers className="h-4 w-4" />
+                              )}
                             </div>
-                            <p className="text-sm text-muted-foreground">{element.note}</p>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-foreground">{element.name}</span>
+                                <Badge
+                                  variant={element.detected ? "default" : "secondary"}
+                                  className={element.detected ? "bg-primary" : ""}
+                                >
+                                  {element.detected ? "감지됨" : "미감지"}
+                                </Badge>
+                              </div>
+                              <p className="text-sm text-muted-foreground">{element.note}</p>
+                            </div>
                           </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-8 text-muted-foreground text-sm">
+                          시각적 분석에서 나무·집·남자·여자 중 하나를 선택하면 해당 그림의 구성요소가 표시됩니다.
                         </div>
-                      ))}
+                      )}
                     </div>
                   </CardContent>
                 </Card>
