@@ -28,18 +28,32 @@ interface DiaryEntry {
   childName: string
 }
 
+interface DiaryOcrResult {
+  original: string
+  date: string
+  region: string
+  weather: string
+  title: string
+  corrected: string
+}
+
 const ENTRIES_PER_PAGE = 3
 
 export function DiaryOCR() {
   const [uploadedImage, setUploadedImage] = useState<string | null>(null)
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [extractedText, setExtractedText] = useState<string>("")
+  const [ocrResult, setOcrResult] = useState<DiaryOcrResult | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [isCopied, setIsCopied] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [region, setRegion] = useState("")
+  const [errorMessage, setErrorMessage] = useState<string>("")
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
+  const ocrBaseUrl =
+    process.env.NEXT_PUBLIC_AIMODELS_BASE_URL ?? "http://localhost:8080"
   const sectionRef = useRef<HTMLDivElement>(null)
   const [savedEntries, setSavedEntries] = useState<DiaryEntry[]>([
     {
@@ -124,31 +138,52 @@ export function DiaryOCR() {
     const reader = new FileReader()
     reader.onload = (e) => {
       setUploadedImage(e.target?.result as string)
+      setUploadedFile(file)
       setExtractedText("")
+      setOcrResult(null)
+      setErrorMessage("")
     }
     reader.readAsDataURL(file)
   }
 
   const handleExtractText = async () => {
-    if (!uploadedImage) return
+    if (!uploadedFile) return
 
     setIsProcessing(true)
     try {
-      const response = await fetch("/api/ocr", {
+      const formData = new FormData()
+      formData.append("file", uploadedFile)
+      formData.append("area", region || "도봉구")
+
+      const response = await fetch(`${ocrBaseUrl}/diary-ocr`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: uploadedImage })
+        body: formData
       })
 
       const data = await response.json()
-      
-      if (data.error) {
-        setExtractedText("텍스트 추출에 실패했습니다. 다시 시도해주세요.")
-      } else {
-        setExtractedText(data.text)
+      if (!response.ok) {
+        const detail = typeof data?.detail === "string" ? data.detail : null
+        throw new Error(detail ?? "텍스트 추출에 실패했습니다.")
       }
+      const raw = Array.isArray(data) ? data[0] : data
+      const normalized: DiaryOcrResult = {
+        original: raw?.["원본"] ?? "",
+        date: raw?.["날짜"] ?? "",
+        region: raw?.["지역"] ?? "",
+        weather: raw?.["날씨"] ?? "",
+        title: raw?.["제목"] ?? "",
+        corrected: raw?.["교정된_내용"] ?? "",
+      }
+      setOcrResult(normalized)
+      setExtractedText(normalized.corrected || normalized.original)
     } catch (error) {
-      setExtractedText("텍스트 추출 중 오류가 발생했습니다.")
+      const message =
+        error instanceof Error
+          ? error.message
+          : "텍스트 추출 중 오류가 발생했습니다."
+      setErrorMessage(message)
+      setExtractedText(message)
+      setOcrResult(null)
     } finally {
       setIsProcessing(false)
     }
@@ -186,8 +221,28 @@ export function DiaryOCR() {
 
   const handleReset = () => {
     setUploadedImage(null)
+    setUploadedFile(null)
     setExtractedText("")
+    setOcrResult(null)
+    setErrorMessage("")
   }
+
+  const jsonPreview = ocrResult
+    ? JSON.stringify(
+        [
+          {
+            원본: ocrResult.original,
+            날짜: ocrResult.date,
+            지역: ocrResult.region,
+            날씨: ocrResult.weather,
+            제목: ocrResult.title,
+            교정된_내용: ocrResult.corrected,
+          },
+        ],
+        null,
+        2
+      )
+    : ""
 
   return (
     <div ref={sectionRef} className="space-y-8">
@@ -357,12 +412,39 @@ export function DiaryOCR() {
                   </Button>
                 )}
               </div>
+              {ocrResult && (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>날짜: {ocrResult.date || "-"}</div>
+                    <div>지역: {ocrResult.region || "-"}</div>
+                    <div>날씨: {ocrResult.weather || "-"}</div>
+                    <div>제목: {ocrResult.title || "-"}</div>
+                  </div>
+                </div>
+              )}
+              {jsonPreview && (
+                <Textarea
+                  readOnly
+                  value={jsonPreview}
+                  className="min-h-[200px] resize-none bg-white border-slate-200 rounded-xl font-mono text-xs"
+                />
+              )}
               <Textarea
                 placeholder="이미지를 업로드하고 '텍스트 추출하기' 버튼을 클릭하세요"
                 value={extractedText}
                 onChange={(e) => setExtractedText(e.target.value)}
                 className="min-h-[200px] resize-none bg-slate-50 border-slate-200 rounded-xl"
               />
+              {ocrResult?.original && (
+                <Textarea
+                  readOnly
+                  value={ocrResult.original}
+                  className="min-h-[120px] resize-none bg-white border-slate-200 rounded-xl"
+                />
+              )}
+              {errorMessage && (
+                <p className="text-xs text-rose-500">{errorMessage}</p>
+              )}
               {extractedText && (
                 <div className="flex gap-3">
                   <Button

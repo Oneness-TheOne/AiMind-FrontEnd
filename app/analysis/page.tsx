@@ -30,6 +30,7 @@ export default function AnalysisPage() {
   })
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   const slotConfigs = [
     {
@@ -152,22 +153,74 @@ export default function AnalysisPage() {
     [applyFileToSlot]
   )
 
-  const handleAnalyze = () => {
+  const handleAnalyze = async () => {
     if (isSubmitting) return
+    setSubmitError(null)
     setIsSubmitting(true)
 
+    const hasAllImages = uploadedImages.every((slot) => slot.file && slot.preview)
+    if (!hasAllImages) {
+      setSubmitError("분석에 필요한 그림 4장을 모두 업로드해주세요.")
+      setIsSubmitting(false)
+      return
+    }
+    if (!childInfo.age) {
+      setSubmitError("아이의 나이를 선택해주세요.")
+      setIsSubmitting(false)
+      return
+    }
+
     try {
+      const formData = new FormData()
+      uploadedImages.forEach((slot, index) => {
+        const file = slot.file
+        if (file) {
+          formData.append(slotConfigs[index].objectKey, file)
+        }
+      })
+      formData.append("child_name", childInfo.name || "")
+      formData.append("child_age", childInfo.age || "")
+      formData.append("child_gender", childInfo.gender || "")
+
+      const response = await fetch("http://localhost:8080/analyze", {
+        method: "POST",
+        body: formData,
+      })
+      if (!response.ok) {
+        const detail = await response.text()
+        throw new Error(detail || "분석 요청 실패")
+      }
+      const data = await response.json()
+
       const globalStore = globalThis as typeof globalThis & {
-        __analysisPayload?: any
-        __analysisFiles?: (File | null)[]
+        __analysisResponse?: any
+        __analysisImages?: string[]
+        __analysisBoxImages?: Record<string, string | null>
       }
-      globalStore.__analysisPayload = {
-        images: uploadedImages.map((slot) => slot.preview),
-        childInfo,
-        slots: slotConfigs.map((slot) => ({ label: slot.label, objectKey: slot.objectKey })),
+
+      const imagePreviews = uploadedImages.map((slot) => slot.preview || "")
+      globalStore.__analysisResponse = data
+      globalStore.__analysisImages = imagePreviews
+      globalStore.__analysisBoxImages = {
+        tree: data?.results?.tree?.box_image_base64 || null,
+        house: data?.results?.house?.box_image_base64 || null,
+        man: data?.results?.man?.box_image_base64 || null,
+        woman: data?.results?.woman?.box_image_base64 || null,
       }
-      globalStore.__analysisFiles = uploadedImages.map((slot) => slot.file)
-      router.push("/analysis/analyzing")
+
+      const storageData = JSON.parse(JSON.stringify(data))
+      if (storageData?.results) {
+        Object.keys(storageData.results).forEach((key) => {
+          if (storageData.results[key]) {
+            storageData.results[key].box_image_base64 = null
+          }
+        })
+      }
+      sessionStorage.setItem("analysisResponse", JSON.stringify(storageData))
+      sessionStorage.setItem("analysisImages", JSON.stringify(imagePreviews))
+      router.push("/analysis/result")
+    } catch (err: any) {
+      setSubmitError(err?.message || "분석 요청 중 오류가 발생했습니다.")
     } finally {
       setIsSubmitting(false)
     }
@@ -389,6 +442,11 @@ export default function AnalysisPage() {
                   </div>
 
                   <div className="pt-4">
+                    {submitError && (
+                      <div className="mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                        {submitError}
+                      </div>
+                    )}
                     <Button
                       className="w-full gap-2"
                       size="lg"

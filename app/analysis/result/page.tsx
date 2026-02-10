@@ -18,7 +18,6 @@ import {
   TrendingUp,
   Brain,
   Lightbulb,
-  Palette,
   Heart,
   Users,
   BarChart3,
@@ -60,7 +59,7 @@ const detectedElements = [
   { name: "꽃/풀", detected: true, note: "지면에 풀 표현" },
 ]
 
-const psychologyData = [
+const defaultPsychologyData = [
   { name: "자아 존중감", score: 85, max: 100 },
   { name: "정서 안정", score: 90, max: 100 },
   { name: "사회성", score: 78, max: 100 },
@@ -68,7 +67,7 @@ const psychologyData = [
   { name: "가족 관계", score: 82, max: 100 },
 ]
 
-const radarData = [
+const defaultRadarData = [
   { subject: "자아 존중감", A: 85, fullMark: 100 },
   { subject: "정서 안정", A: 90, fullMark: 100 },
   { subject: "사회성", A: 78, fullMark: 100 },
@@ -76,20 +75,18 @@ const radarData = [
   { subject: "가족 관계", A: 82, fullMark: 100 },
 ]
 
-const peerComparisonData = [
-  { name: "세부묘사", child: 85, average: 70 },
-  { name: "색상사용", child: 78, average: 72 },
-  { name: "공간활용", child: 90, average: 68 },
-  { name: "비율표현", child: 72, average: 65 },
-  { name: "창의성", child: 88, average: 70 },
+const defaultPeerComparisonData = [
+  { name: "세부묘사", child: 85, average: 50 },
+  { name: "공간활용", child: 90, average: 50 },
+  { name: "비율표현", child: 72, average: 50 },
+  { name: "창의성", child: 88, average: 50 },
 ]
 
-const colorAnalysis = [
-  { color: "파랑", meaning: "안정감, 신뢰", percentage: 30, colorClass: "bg-blue-500" },
-  { color: "초록", meaning: "성장, 희망", percentage: 25, colorClass: "bg-green-500" },
-  { color: "노랑", meaning: "밝음, 활기", percentage: 20, colorClass: "bg-yellow-500" },
-  { color: "빨강", meaning: "에너지, 열정", percentage: 15, colorClass: "bg-red-500" },
-  { color: "갈색", meaning: "안정, 자연", percentage: 10, colorClass: "bg-amber-700" },
+const defaultDevelopmentScores = [
+  { name: "그림 복잡도", value: 85 },
+  { name: "세부 표현력", value: 78 },
+  { name: "공간 인식", value: 90 },
+  { name: "비율 표현", value: 72 },
 ]
 
 const recommendations = [
@@ -132,6 +129,10 @@ export default function ResultPage() {
     developmentStage: "분석 완료",
     emotionalState: "분석 완료",
   })
+  const [peerComparisonData, setPeerComparisonData] = useState(defaultPeerComparisonData)
+  const [developmentScores, setDevelopmentScores] = useState(defaultDevelopmentScores)
+  const [psychologyData, setPsychologyData] = useState(defaultPsychologyData)
+  const [radarData, setRadarData] = useState(defaultRadarData)
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
   const [boxImages, setBoxImages] = useState<Record<string, string | null>>({})
   const [interpretations, setInterpretations] = useState<Record<string, any>>({})
@@ -195,6 +196,7 @@ export default function ResultPage() {
       const response = memoryResponse || JSON.parse(rawResponse || "{}")
       const child = response?.child || {}
       const results = response?.results || {}
+      const comparison = response?.comparison || {}
       const rawSummary =
         results.tree?.interpretation?.전체_요약 ||
         results.house?.interpretation?.전체_요약 ||
@@ -206,14 +208,20 @@ export default function ResultPage() {
           ? rawSummary
           : rawSummary?.내용 || JSON.stringify(rawSummary, null, 2)
 
+      const developmentStage = comparison?.development?.stage || "분석 완료"
+      const overallScore = typeof comparison?.overall_score === "number" ? comparison.overall_score : 0
+      const psychologyScores = comparison?.psychology?.scores || {}
+      const emotionalState =
+        Object.values(psychologyScores).length > 0 ? "분석 완료" : "분석 완료"
+
       setAnalysisResult({
         childName: child.name || "아이",
         age: child.age || "-",
         drawingType: "집-나무-사람 (HTP)",
-        overallScore: 0,
+        overallScore,
         summary,
-        developmentStage: "분석 완료",
-        emotionalState: "분석 완료",
+        developmentStage,
+        emotionalState,
       })
       setInterpretations(results)
       setBoxImages({
@@ -222,6 +230,50 @@ export default function ResultPage() {
         man: memoryBoxImages?.man || results.man?.box_image_base64 || null,
         woman: memoryBoxImages?.woman || results.woman?.box_image_base64 || null,
       })
+
+      if (comparison?.peer) {
+        const peerData = [
+          "세부묘사",
+          "공간활용",
+          "비율표현",
+          "창의성",
+        ].map((label) => ({
+          name: label,
+          child: comparison.peer?.[label] ?? 0,
+          average: 50,
+        }))
+        setPeerComparisonData(peerData)
+      }
+
+      if (comparison?.development?.scores) {
+        const devData = [
+          "그림 복잡도",
+          "세부 표현력",
+          "공간 인식",
+          "비율 표현",
+        ].map((label) => ({
+          name: label,
+          value: comparison.development?.scores?.[label] ?? 0,
+        }))
+        setDevelopmentScores(devData)
+      }
+
+      if (comparison?.psychology?.scores) {
+        const order = ["자아 존중감", "정서 안정", "사회성", "창의성", "가족 관계"]
+        const psychData = order.map((label) => ({
+          name: label,
+          score: comparison.psychology?.scores?.[label] ?? 0,
+          max: 100,
+        }))
+        setPsychologyData(psychData)
+        setRadarData(
+          order.map((label) => ({
+            subject: label,
+            A: comparison.psychology?.scores?.[label] ?? 0,
+            fullMark: 100,
+          }))
+        )
+      }
     }
     if (memoryImages?.length) {
       setImagePreviews(memoryImages)
@@ -304,7 +356,11 @@ export default function ResultPage() {
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">종합 점수</p>
-                      <p className="font-semibold text-foreground">상위 15%</p>
+                      <p className="font-semibold text-foreground">
+                        {analysisResult.overallScore > 0
+                          ? `상위 ${Math.max(1, Math.round(100 - analysisResult.overallScore))}%`
+                          : "분석 중"}
+                      </p>
                     </div>
                   </div>
                   <div className="flex-1">
@@ -471,7 +527,7 @@ export default function ResultPage() {
                           <YAxis dataKey="name" type="category" width={80} />
                           <Tooltip />
                           <Legend />
-                          <Bar dataKey="child" name="민준이" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                          <Bar dataKey="child" name={analysisResult.childName} fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
                           <Bar dataKey="average" name="또래 평균" fill="hsl(var(--muted))" radius={[0, 4, 4, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
@@ -493,41 +549,22 @@ export default function ResultPage() {
                   <CardContent className="space-y-6">
                     <div className="text-center p-6 bg-primary/5 rounded-xl">
                       <p className="text-sm text-muted-foreground mb-2">현재 발달 단계</p>
-                      <p className="text-2xl font-bold text-primary mb-1">도식기 (7-9세)</p>
+                      <p className="text-2xl font-bold text-primary mb-1">{analysisResult.developmentStage}</p>
                       <p className="text-sm text-muted-foreground">
-                        연령에 적합한 발달 수준을 보입니다
+                        동일 연령 기준 백분위로 평가했습니다
                       </p>
                     </div>
                     
                     <div className="space-y-4">
-                      <div>
-                        <div className="flex justify-between text-sm mb-2">
-                          <span className="text-muted-foreground">그림 복잡도</span>
-                          <span className="font-medium">85/100</span>
+                      {developmentScores.map((item) => (
+                        <div key={item.name}>
+                          <div className="flex justify-between text-sm mb-2">
+                            <span className="text-muted-foreground">{item.name}</span>
+                            <span className="font-medium">{item.value}/100</span>
+                          </div>
+                          <Progress value={item.value} className="h-2" />
                         </div>
-                        <Progress value={85} className="h-2" />
-                      </div>
-                      <div>
-                        <div className="flex justify-between text-sm mb-2">
-                          <span className="text-muted-foreground">세부 표현력</span>
-                          <span className="font-medium">78/100</span>
-                        </div>
-                        <Progress value={78} className="h-2" />
-                      </div>
-                      <div>
-                        <div className="flex justify-between text-sm mb-2">
-                          <span className="text-muted-foreground">공간 인식</span>
-                          <span className="font-medium">90/100</span>
-                        </div>
-                        <Progress value={90} className="h-2" />
-                      </div>
-                      <div>
-                        <div className="flex justify-between text-sm mb-2">
-                          <span className="text-muted-foreground">비율 표현</span>
-                          <span className="font-medium">72/100</span>
-                        </div>
-                        <Progress value={72} className="h-2" />
-                      </div>
+                      ))}
                     </div>
                   </CardContent>
                 </Card>
@@ -645,33 +682,6 @@ export default function ResultPage() {
                   </CardContent>
                 </Card>
 
-                {/* Color Analysis */}
-                <Card className="border-0 shadow-sm">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <Palette className="h-4 w-4 text-primary" />
-                      </div>
-                      색상 심리 분석
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {colorAnalysis.map((color) => (
-                        <div key={color.color} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors">
-                          <div className={`h-10 w-10 rounded-xl ${color.colorClass} shadow-sm`} />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-center mb-1">
-                              <span className="font-medium text-sm text-foreground">{color.color}</span>
-                              <span className="text-xs font-semibold text-primary">{color.percentage}%</span>
-                            </div>
-                            <p className="text-xs text-muted-foreground truncate">{color.meaning}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
               </div>
 
               {/* Emotional State Grid */}
