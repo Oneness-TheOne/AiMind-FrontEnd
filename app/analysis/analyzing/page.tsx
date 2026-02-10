@@ -152,11 +152,13 @@ export default function AnalyzingPage() {
               const userId = meData.id
               if (userId != null) {
                 const results = data?.results || {}
+                // image_json에는 features(ratio, center_x, center_y 등)가 포함되어 DB 저장 후 T-Score 재계산에 사용됨
+                const rawImg = (o: unknown) => (o && typeof o === "object" ? o : {})
                 const elementAnalysis = {
-                  tree: results.tree?.image_json ?? {},
-                  house: results.house?.image_json ?? {},
-                  man: results.man?.image_json ?? {},
-                  woman: results.woman?.image_json ?? {},
+                  tree: JSON.parse(JSON.stringify(rawImg(results.tree?.image_json))),
+                  house: JSON.parse(JSON.stringify(rawImg(results.house?.image_json))),
+                  man: JSON.parse(JSON.stringify(rawImg(results.man?.image_json))),
+                  woman: JSON.parse(JSON.stringify(rawImg(results.woman?.image_json))),
                 }
                 const boxImagesBase64: Record<string, string | null> = {
                   tree: results.tree?.box_image_base64 ?? null,
@@ -171,7 +173,7 @@ export default function AnalyzingPage() {
                     analysis: results[k]?.analysis,
                   }
                 })
-                await fetch(`${apiBaseUrl}/drawing-analyses`, {
+                const saveRes = await fetch(`${apiBaseUrl}/drawing-analyses`, {
                   method: "POST",
                   headers: {
                     "Content-Type": "application/json",
@@ -186,9 +188,14 @@ export default function AnalyzingPage() {
                     comparison: data?.comparison || {},
                   }),
                 })
+                if (!saveRes.ok) {
+                  const errText = await saveRes.text()
+                  console.error("[분석 저장 실패]", saveRes.status, errText)
+                }
               }
             }
-          } catch {
+          } catch (e) {
+            console.error("[분석 저장 중 예외]", e)
             // 저장 실패해도 결과 화면은 그대로 이동
           }
         }

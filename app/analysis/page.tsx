@@ -401,28 +401,26 @@ export default function AnalysisPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {children.length > 0 && (
-                    <div className="space-y-2">
-                      <Label>아이를 선택하세요</Label>
-                      <Select
-                        value={selectedChildId || DIRECT_INPUT_VALUE}
-                        onValueChange={handleSelectChild}
-                        disabled={childrenLoading}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder={childrenLoading ? "불러오는 중..." : "아이를 선택하세요 (또는 직접 입력)"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={DIRECT_INPUT_VALUE}>직접 입력</SelectItem>
-                          {children.map((child) => (
-                            <SelectItem key={child.id} value={child.id.toString()}>
-                              {child.name} ({child.age}세, {child.gender === "male" ? "남아" : "여아"})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
+                  <div className="space-y-2">
+                    <Label>아이를 선택하세요</Label>
+                    <Select
+                      value={selectedChildId || DIRECT_INPUT_VALUE}
+                      onValueChange={handleSelectChild}
+                      disabled={childrenLoading}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder={childrenLoading ? "불러오는 중..." : "아이를 선택하세요 (또는 직접 입력)"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={DIRECT_INPUT_VALUE}>직접 입력</SelectItem>
+                        {children.map((child) => (
+                          <SelectItem key={child.id} value={child.id.toString()}>
+                            {child.name} ({child.age}세, {child.gender === "male" ? "남아" : "여아"})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="grid gap-4 md:grid-cols-3">
                     <div className="space-y-2">
                       <Label htmlFor="name">아이 이름 (별명)</Label>

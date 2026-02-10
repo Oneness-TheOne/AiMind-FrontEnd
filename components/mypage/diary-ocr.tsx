@@ -6,6 +6,13 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog"
+import {
   Upload,
   X,
   Loader2,
@@ -25,7 +32,10 @@ interface DiaryEntry {
   imageUrl: string
   extractedText: string
   date: string
-  childName: string
+  title: string
+  region: string
+  originalText: string
+  createdAt: string
 }
 
 interface DiaryOcrResult {
@@ -45,32 +55,21 @@ export function DiaryOCR() {
   const [extractedText, setExtractedText] = useState<string>("")
   const [ocrResult, setOcrResult] = useState<DiaryOcrResult | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const [isCopied, setIsCopied] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [region, setRegion] = useState("")
+  const [userId, setUserId] = useState<number | null>(null)
   const [errorMessage, setErrorMessage] = useState<string>("")
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
   const ocrBaseUrl =
     process.env.NEXT_PUBLIC_AIMODELS_BASE_URL ?? "http://localhost:8080"
   const sectionRef = useRef<HTMLDivElement>(null)
-  const [savedEntries, setSavedEntries] = useState<DiaryEntry[]>([
-    {
-      id: "1",
-      imageUrl: "/placeholder.svg",
-      extractedText: "2024년 1월 15일 월요일\n오늘은 할머니 댁에 갔다.\n할머니가 맛있는 떡볶이를 해주셨다.\n너무 맛있었다!",
-      date: "2024.01.15",
-      childName: "김지우"
-    },
-    {
-      id: "2",
-      imageUrl: "/placeholder.svg",
-      extractedText: "2024년 1월 10일 수요일\n유치원에서 친구랑 놀았다.\n미끄럼틀을 많이 탔다.\n재미있었다.",
-      date: "2024.01.10",
-      childName: "김지우"
-    }
-  ])
+  const [savedEntries, setSavedEntries] = useState<DiaryEntry[]>([])
+  const [selectedEntry, setSelectedEntry] = useState<DiaryEntry | null>(null)
+  const [isDetailOpen, setIsDetailOpen] = useState(false)
 
   useEffect(() => {
     setIsVisible(true)
@@ -92,6 +91,9 @@ export function DiaryOCR() {
           return
         }
         const data = await response.json()
+        if (typeof data.id === "number" && !userId) {
+          setUserId(data.id)
+        }
         if (data.region && !region) {
           setRegion(data.region)
         }
@@ -100,7 +102,38 @@ export function DiaryOCR() {
       }
     }
     fetchProfile()
-  }, [apiBaseUrl, region])
+  }, [apiBaseUrl, region, userId])
+
+  useEffect(() => {
+    const token =
+      localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token")
+    if (!token || !userId) return
+
+    const loadEntries = async () => {
+      try {
+        const res = await fetch(`${apiBaseUrl}/diary-ocr?user_id=${userId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) return
+        const data = await res.json()
+        if (!Array.isArray(data)) return
+        const normalized: DiaryEntry[] = data.map((d: any) => ({
+          id: d?.id ?? "",
+          imageUrl: d?.image_url ?? "",
+          extractedText: d?.corrected_text ?? d?.original_text ?? "",
+          date: d?.date ?? "",
+          title: d?.title ?? "",
+          region: d?.region ?? "",
+          originalText: d?.original_text ?? "",
+          createdAt: d?.created_at ?? "",
+        }))
+        setSavedEntries(normalized)
+      } catch {
+        // ignore
+      }
+    }
+    loadEntries()
+  }, [apiBaseUrl, userId])
 
   const totalPages = Math.ceil(savedEntries.length / ENTRIES_PER_PAGE)
   const paginatedEntries = savedEntries.slice(
@@ -195,28 +228,73 @@ export function DiaryOCR() {
     setTimeout(() => setIsCopied(false), 2000)
   }
 
-  const handleSaveEntry = () => {
-    if (!uploadedImage || !extractedText) return
+  const handleSaveEntry = async () => {
+    if (!uploadedFile) return
+    const token =
+      localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token")
+    if (!token) {
+      alert("로그인이 필요합니다.")
+      return
+    }
     if (!region) {
       alert("위치를 선택해주세요.")
       return
     }
 
-    const newEntry: DiaryEntry = {
-      id: Date.now().toString(),
-      imageUrl: uploadedImage,
-      extractedText,
-      date: new Date().toLocaleDateString("ko-KR", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit"
-      }).replace(/\. /g, ".").replace(".", ""),
-      childName: "김지우"
-    }
+    setIsSaving(true)
+    setErrorMessage("")
+    try {
+      const formData = new FormData()
+      formData.append("file", uploadedFile)
+      formData.append("area", region)
 
-    setSavedEntries([newEntry, ...savedEntries])
-    setUploadedImage(null)
-    setExtractedText("")
+      const res = await fetch(`${apiBaseUrl}/diary-ocr`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      })
+
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        const message =
+          typeof data?.detail?.message === "string"
+            ? data.detail.message
+            : typeof data?.detail === "string"
+              ? data.detail
+              : "저장에 실패했습니다."
+        throw new Error(message)
+      }
+
+      const entry: DiaryEntry = {
+        id: data?.id ?? "",
+        imageUrl: data?.image_url ?? "",
+        extractedText: data?.corrected_text ?? data?.original_text ?? "",
+        date: data?.date ?? "",
+        title: data?.title ?? "",
+        region: data?.region ?? region,
+        originalText: data?.original_text ?? "",
+        createdAt: data?.created_at ?? "",
+      }
+
+      setSavedEntries((prev) => [entry, ...prev])
+      setOcrResult({
+        original: entry.originalText,
+        date: entry.date,
+        region: entry.region,
+        weather: "",
+        title: entry.title,
+        corrected: entry.extractedText,
+      })
+      setExtractedText(entry.extractedText || entry.originalText)
+      setUploadedImage(null)
+      setUploadedFile(null)
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "저장 중 오류가 발생했습니다."
+      setErrorMessage(message)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const handleReset = () => {
@@ -459,9 +537,19 @@ export function DiaryOCR() {
                   <Button
                     className="flex-1 gap-2"
                     onClick={handleSaveEntry}
+                    disabled={isSaving || isProcessing}
                   >
-                    <Download className="h-4 w-4" />
-                    저장하기
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        저장 중...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="h-4 w-4" />
+                        저장하기
+                      </>
+                    )}
                   </Button>
                 </div>
               )}
@@ -496,6 +584,10 @@ export function DiaryOCR() {
                   isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
                 }`}
                 style={{ transitionDelay: `${300 + index * 100}ms` }}
+                onClick={() => {
+                  setSelectedEntry(entry)
+                  setIsDetailOpen(true)
+                }}
               >
                 <div className="w-20 h-20 rounded-xl bg-slate-200 flex-shrink-0 overflow-hidden">
                   <img
@@ -506,10 +598,12 @@ export function DiaryOCR() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="font-semibold text-slate-800">{entry.childName}</span>
+                    <span className="font-semibold text-slate-800">
+                      {entry.title || "그림일기"}
+                    </span>
                     <span className="text-sm text-slate-400 flex items-center gap-1">
                       <Calendar className="h-3 w-3" />
-                      {entry.date}
+                      {entry.date || "-"}
                     </span>
                   </div>
                   <p className="text-sm text-slate-600 line-clamp-2 whitespace-pre-line">
@@ -519,7 +613,10 @@ export function DiaryOCR() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => navigator.clipboard.writeText(entry.extractedText)}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    navigator.clipboard.writeText(entry.extractedText)
+                  }}
                   className="self-center h-9 w-9 text-slate-400 hover:text-teal-600"
                 >
                   <Copy className="h-4 w-4" />
@@ -536,6 +633,45 @@ export function DiaryOCR() {
           </div>
         )}
       </div>
+
+      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{selectedEntry?.title || "그림일기"}</DialogTitle>
+            <DialogDescription className="flex flex-wrap gap-x-3 gap-y-1">
+              <span>날짜: {selectedEntry?.date || "-"}</span>
+              <span>지역: {selectedEntry?.region || "-"}</span>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-xl border border-slate-200 overflow-hidden bg-slate-50">
+              <img
+                src={selectedEntry?.imageUrl || "/placeholder.svg"}
+                alt="그림일기"
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <div className="space-y-3">
+              <div className="text-sm font-medium text-slate-700">교정된 내용</div>
+              <Textarea
+                readOnly
+                value={selectedEntry?.extractedText || ""}
+                className="min-h-[220px] resize-none bg-white border-slate-200 rounded-xl"
+              />
+              {selectedEntry?.originalText ? (
+                <>
+                  <div className="text-sm font-medium text-slate-700">원본 텍스트</div>
+                  <Textarea
+                    readOnly
+                    value={selectedEntry.originalText}
+                    className="min-h-[140px] resize-none bg-slate-50 border-slate-200 rounded-xl"
+                  />
+                </>
+              ) : null}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -234,7 +234,25 @@ export default function MyPage() {
     return trimmed;
   };
 
-  const handleViewDrawingAnalysis = (doc: DrawingAnalysisItem) => {
+  const handleViewDrawingAnalysis = async (doc: DrawingAnalysisItem) => {
+    const token =
+      typeof window !== "undefined"
+        ? localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token")
+        : null;
+    let resolved = doc;
+    if (token) {
+      try {
+        const res = await fetch(`${apiBaseUrl}/drawing-analyses/${doc.id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const fetched = (await res.json()) as DrawingAnalysisItem;
+          resolved = fetched;
+        }
+      } catch {
+        // fallback to list item
+      }
+    }
     const labels = {
       tree: "나무",
       house: "집",
@@ -243,15 +261,15 @@ export default function MyPage() {
     } as const;
     const results = (["tree", "house", "man", "woman"] as const).reduce(
       (acc, key) => {
-        const psych = doc.psychological_interpretation?.[key] || {};
+        const psych = resolved.psychological_interpretation?.[key] || {};
         const interp = psych.interpretation;
         const analysis = psych.analysis;
         acc[key] = {
           label: labels[key],
-          image_json: (doc.element_analysis?.[key] as Record<string, unknown>) || {},
+          image_json: (resolved.element_analysis?.[key] as Record<string, unknown>) || {},
           interpretation: interp,
           analysis: analysis || interp,
-          box_image_base64: doc.analyzed_image_urls?.[key] || null,
+          box_image_base64: resolved.analyzed_image_urls?.[key] || null,
           metrics: {},
         };
         return acc;
@@ -260,9 +278,9 @@ export default function MyPage() {
     );
     const response = {
       success: true,
-      child: doc.child_info || { name: "-", age: "-", gender: "" },
+      child: resolved.child_info || { name: "-", age: "-", gender: "" },
       results,
-      comparison: doc.comparison || {},
+      comparison: resolved.comparison || {},
     };
     const globalStore = globalThis as typeof globalThis & {
       __analysisResponse?: unknown;
@@ -272,10 +290,10 @@ export default function MyPage() {
     globalStore.__analysisResponse = response;
     globalStore.__analysisImages = [];
     globalStore.__analysisBoxImages = {
-      tree: doc.analyzed_image_urls?.tree || null,
-      house: doc.analyzed_image_urls?.house || null,
-      man: doc.analyzed_image_urls?.man || null,
-      woman: doc.analyzed_image_urls?.woman || null,
+      tree: resolved.analyzed_image_urls?.tree || null,
+      house: resolved.analyzed_image_urls?.house || null,
+      man: resolved.analyzed_image_urls?.man || null,
+      woman: resolved.analyzed_image_urls?.woman || null,
     };
     try {
       sessionStorage.setItem("analysisResponse", JSON.stringify(response));
