@@ -33,7 +33,6 @@ interface DiaryEntry {
   extractedText: string
   date: string
   title: string
-  region: string
   originalText: string
   createdAt: string
 }
@@ -41,7 +40,6 @@ interface DiaryEntry {
 interface DiaryOcrResult {
   original: string
   date: string
-  region: string
   weather: string
   title: string
   corrected: string
@@ -60,12 +58,9 @@ export function DiaryOCR() {
   const [isDragging, setIsDragging] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
-  const [region, setRegion] = useState("")
   const [userId, setUserId] = useState<number | null>(null)
   const [errorMessage, setErrorMessage] = useState<string>("")
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
-  const ocrBaseUrl =
-    process.env.NEXT_PUBLIC_AIMODELS_BASE_URL ?? "http://localhost:8080"
   const sectionRef = useRef<HTMLDivElement>(null)
   const [savedEntries, setSavedEntries] = useState<DiaryEntry[]>([])
   const [selectedEntry, setSelectedEntry] = useState<DiaryEntry | null>(null)
@@ -94,15 +89,12 @@ export function DiaryOCR() {
         if (typeof data.id === "number" && !userId) {
           setUserId(data.id)
         }
-        if (data.region && !region) {
-          setRegion(data.region)
-        }
       } catch {
         // ignore profile fetch errors for now
       }
     }
     fetchProfile()
-  }, [apiBaseUrl, region, userId])
+  }, [apiBaseUrl, userId])
 
   useEffect(() => {
     const token =
@@ -123,7 +115,6 @@ export function DiaryOCR() {
           extractedText: d?.corrected_text ?? d?.original_text ?? "",
           date: d?.date ?? "",
           title: d?.title ?? "",
-          region: d?.region ?? "",
           originalText: d?.original_text ?? "",
           createdAt: d?.created_at ?? "",
         }))
@@ -186,9 +177,8 @@ export function DiaryOCR() {
     try {
       const formData = new FormData()
       formData.append("file", uploadedFile)
-      formData.append("area", region || "도봉구")
 
-      const response = await fetch(`${ocrBaseUrl}/diary-ocr`, {
+      const response = await fetch(`${apiBaseUrl}/diary-ocr/extract`, {
         method: "POST",
         body: formData
       })
@@ -202,7 +192,6 @@ export function DiaryOCR() {
       const normalized: DiaryOcrResult = {
         original: raw?.["원본"] ?? "",
         date: raw?.["날짜"] ?? "",
-        region: raw?.["지역"] ?? "",
         weather: raw?.["날씨"] ?? "",
         title: raw?.["제목"] ?? "",
         corrected: raw?.["교정된_내용"] ?? "",
@@ -236,17 +225,11 @@ export function DiaryOCR() {
       alert("로그인이 필요합니다.")
       return
     }
-    if (!region) {
-      alert("위치를 선택해주세요.")
-      return
-    }
-
     setIsSaving(true)
     setErrorMessage("")
     try {
       const formData = new FormData()
       formData.append("file", uploadedFile)
-      formData.append("area", region)
 
       const res = await fetch(`${apiBaseUrl}/diary-ocr`, {
         method: "POST",
@@ -271,7 +254,6 @@ export function DiaryOCR() {
         extractedText: data?.corrected_text ?? data?.original_text ?? "",
         date: data?.date ?? "",
         title: data?.title ?? "",
-        region: data?.region ?? region,
         originalText: data?.original_text ?? "",
         createdAt: data?.created_at ?? "",
       }
@@ -280,7 +262,6 @@ export function DiaryOCR() {
       setOcrResult({
         original: entry.originalText,
         date: entry.date,
-        region: entry.region,
         weather: "",
         title: entry.title,
         corrected: entry.extractedText,
@@ -311,7 +292,6 @@ export function DiaryOCR() {
           {
             원본: ocrResult.original,
             날짜: ocrResult.date,
-            지역: ocrResult.region,
             날씨: ocrResult.weather,
             제목: ocrResult.title,
             교정된_내용: ocrResult.corrected,
@@ -334,51 +314,6 @@ export function DiaryOCR() {
         <p className="text-sm text-slate-500 mt-1">
           아이의 그림일기 사진을 업로드하면 AI가 손글씨를 텍스트로 변환해드립니다
         </p>
-      </div>
-
-      {/* Location */}
-      <div
-        className={`transition-all duration-700 delay-75 ${
-          isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
-        }`}
-      >
-        <div className="space-y-2 max-w-sm">
-          <label htmlFor="region" className="text-sm font-medium text-slate-700">
-            위치
-          </label>
-          <select
-            id="region"
-            value={region}
-            onChange={(e) => setRegion(e.target.value)}
-            className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
-          >
-            <option value="" disabled>
-              위치를 선택하세요
-            </option>
-            {[
-              "서울특별시",
-              "부산광역시",
-              "대구광역시",
-              "인천광역시",
-              "광주광역시",
-              "대전광역시",
-              "울산광역시",
-              "경기도",
-              "강원도",
-              "충청북도",
-              "충청남도",
-              "전라북도",
-              "전라남도",
-              "경상북도",
-              "경상남도",
-              "제주특별자치도",
-            ].map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </div>
       </div>
 
       {/* Upload Area */}
@@ -494,7 +429,6 @@ export function DiaryOCR() {
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
                   <div className="grid grid-cols-2 gap-2">
                     <div>날짜: {ocrResult.date || "-"}</div>
-                    <div>지역: {ocrResult.region || "-"}</div>
                     <div>날씨: {ocrResult.weather || "-"}</div>
                     <div>제목: {ocrResult.title || "-"}</div>
                   </div>
@@ -640,7 +574,6 @@ export function DiaryOCR() {
             <DialogTitle>{selectedEntry?.title || "그림일기"}</DialogTitle>
             <DialogDescription className="flex flex-wrap gap-x-3 gap-y-1">
               <span>날짜: {selectedEntry?.date || "-"}</span>
-              <span>지역: {selectedEntry?.region || "-"}</span>
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 md:grid-cols-2">

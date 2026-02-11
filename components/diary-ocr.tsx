@@ -31,7 +31,6 @@ interface DiaryEntry {
 interface DiaryOcrResult {
   original: string
   date: string
-  region: string
   weather: string
   title: string
   corrected: string
@@ -110,7 +109,6 @@ export function DiaryOCR() {
     try {
       const formData = new FormData()
       formData.append("file", uploadedFile)
-      formData.append("area", "도봉구")
 
       const response = await fetch(`${ocrBaseUrl}/diary-ocr`, {
         method: "POST",
@@ -126,7 +124,6 @@ export function DiaryOCR() {
       const normalized: DiaryOcrResult = {
         original: raw?.["원본"] ?? "",
         date: raw?.["날짜"] ?? "",
-        region: raw?.["지역"] ?? "",
         weather: raw?.["날씨"] ?? "",
         title: raw?.["제목"] ?? "",
         corrected: raw?.["교정된_내용"] ?? "",
@@ -186,7 +183,6 @@ export function DiaryOCR() {
           {
             원본: ocrResult.original,
             날짜: ocrResult.date,
-            지역: ocrResult.region,
             날씨: ocrResult.weather,
             제목: ocrResult.title,
             교정된_내용: ocrResult.corrected,
@@ -320,7 +316,6 @@ export function DiaryOCR() {
                   <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
                     <div className="grid grid-cols-2 gap-2">
                       <div>날짜: {ocrResult.date || "-"}</div>
-                      <div>지역: {ocrResult.region || "-"}</div>
                       <div>날씨: {ocrResult.weather || "-"}</div>
                       <div>제목: {ocrResult.title || "-"}</div>
                     </div>
