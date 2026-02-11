@@ -1,9 +1,18 @@
+"use client";
+
+import { useState, useEffect } from "react";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { VideoHero } from "@/components/shared/video-hero";
 import { DiaryOCR } from "@/components/mypage/diary-ocr";
-import { Card, CardContent } from "@/components/ui/card";
-import { BookOpen, Sparkles, Clock, Shield } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { BookOpen, Sparkles, Clock, Shield, Info } from "lucide-react";
+
+export type ChildOption = { id: number; name: string; age: number; gender: string };
+const DIRECT_INPUT_VALUE = "__direct__";
 
 const features = [
   {
@@ -29,6 +38,54 @@ const features = [
 ];
 
 export default function DiaryOCRPage() {
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+  const [children, setChildren] = useState<ChildOption[]>([]);
+  const [selectedChildId, setSelectedChildId] = useState<string>("");
+  const [childrenLoading, setChildrenLoading] = useState(false);
+  const [childInfo, setChildInfo] = useState({ name: "", age: "", gender: "" });
+
+  useEffect(() => {
+    const token =
+      typeof window !== "undefined"
+        ? localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token")
+        : null;
+    if (!token) return;
+    setChildrenLoading(true);
+    fetch(`${apiBaseUrl}/children`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((list: ChildOption[]) => {
+        if (Array.isArray(list)) setChildren(list);
+      })
+      .catch(() => setChildren([]))
+      .finally(() => setChildrenLoading(false));
+  }, [apiBaseUrl]);
+
+  const handleSelectChild = (childId: string) => {
+    const isDirect = childId === DIRECT_INPUT_VALUE || !childId;
+    setSelectedChildId(isDirect ? "" : childId);
+    if (isDirect) {
+      setChildInfo({ name: "", age: "", gender: "" });
+      return;
+    }
+    const child = children.find((c) => c.id === parseInt(childId, 10));
+    if (child) {
+      setChildInfo({
+        name: child.name,
+        age: child.age.toString(),
+        gender: child.gender,
+      });
+    }
+  };
+
+  const selectedChild =
+    selectedChildId && selectedChildId !== DIRECT_INPUT_VALUE
+      ? (children.find((c) => c.id === parseInt(selectedChildId, 10)) ?? null)
+      : null;
+  const effectiveChildName = selectedChild ? selectedChild.name : childInfo.name;
+  const hasChildInfo = !!(selectedChild || (childInfo.name.trim() && childInfo.age && childInfo.gender));
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <Header />
@@ -72,8 +129,108 @@ export default function DiaryOCRPage() {
 
         {/* Main Content */}
         <div className="container mx-auto px-4 lg:px-8 py-8">
-          <div className="max-w-4xl mx-auto">
-            <DiaryOCR />
+          <div className="max-w-4xl mx-auto space-y-6">
+            {/* 아이 정보 입력 (그림 분석 페이지와 동일) */}
+            <Card className="border-border/50">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Info className="h-5 w-5 text-primary" />
+                  아이 정보 입력
+                </CardTitle>
+                <CardDescription>
+                  등록한 아이를 선택하거나 직접 입력해주세요
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>아이를 선택하세요</Label>
+                  <Select
+                    value={selectedChildId || DIRECT_INPUT_VALUE}
+                    onValueChange={handleSelectChild}
+                    disabled={childrenLoading}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue
+                        placeholder={
+                          childrenLoading
+                            ? "불러오는 중..."
+                            : "아이를 선택하세요 (또는 직접 입력)"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={DIRECT_INPUT_VALUE}>직접 입력</SelectItem>
+                      {children.map((child) => (
+                        <SelectItem key={child.id} value={String(child.id)}>
+                          {child.name} ({child.age}세,{" "}
+                          {child.gender === "male" ? "남아" : "여아"})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="diary-child-name">아이 이름 (별명)</Label>
+                    <Input
+                      id="diary-child-name"
+                      placeholder="예: 민준이"
+                      value={childInfo.name}
+                      onChange={(e) => {
+                        setSelectedChildId("");
+                        setChildInfo((prev) => ({ ...prev, name: e.target.value }));
+                      }}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="diary-child-age">나이</Label>
+                    <Select
+                      value={childInfo.age}
+                      onValueChange={(value) => {
+                        setSelectedChildId("");
+                        setChildInfo((prev) => ({ ...prev, age: value }));
+                      }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="나이 선택" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 7 }, (_, i) => i + 7).map((age) => (
+                          <SelectItem key={age} value={age.toString()}>
+                            {age}세
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="diary-child-gender">성별</Label>
+                    <Select
+                      value={childInfo.gender}
+                      onValueChange={(value) => {
+                        setSelectedChildId("");
+                        setChildInfo((prev) => ({ ...prev, gender: value }));
+                      }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="성별 선택" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="male">남아</SelectItem>
+                        <SelectItem value="female">여아</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <DiaryOCR
+              selectedChild={selectedChild}
+              childInfo={childInfo}
+              hasChildInfo={hasChildInfo}
+              effectiveChildName={effectiveChildName}
+            />
           </div>
         </div>
 

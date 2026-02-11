@@ -43,6 +43,20 @@ interface DiaryEntry {
   originalText: string
   createdAt: string
   weather?: string
+  childName?: string
+}
+
+export interface DiaryOCRSelectedChild {
+  id: number
+  name: string
+  age: number
+  gender: string
+}
+
+export interface DiaryOCRChildInfo {
+  name: string
+  age: string
+  gender: string
 }
 
 interface DiaryOcrResult {
@@ -65,7 +79,17 @@ const WEATHER_OPTIONS = [
   { value: "바람", label: "바람", icon: Wind, color: "text-teal-500", bg: "bg-teal-50" },
 ] as const
 
-export function DiaryOCR() {
+export function DiaryOCR({
+  selectedChild = null,
+  childInfo = { name: "", age: "", gender: "" },
+  hasChildInfo = false,
+  effectiveChildName = "",
+}: {
+  selectedChild?: DiaryOCRSelectedChild | null
+  childInfo?: DiaryOCRChildInfo
+  hasChildInfo?: boolean
+  effectiveChildName?: string
+}) {
   const [uploadedImage, setUploadedImage] = useState<string | null>(null)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [extractedText, setExtractedText] = useState<string>("")
@@ -137,6 +161,7 @@ export function DiaryOCR() {
           title: d?.title ?? "",
           originalText: d?.original_text ?? "",
           createdAt: d?.created_at ?? "",
+          childName: d?.child_name ?? "",
         }))
         setSavedEntries(normalized)
       } catch {
@@ -251,6 +276,10 @@ export function DiaryOCR() {
 
   const handleSaveEntry = async () => {
     if (!uploadedFile) return
+    if (!hasChildInfo) {
+      alert("아이를 선택하거나 이름·나이·성별을 입력해주세요.")
+      return
+    }
     const token =
       localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token")
     if (!token) {
@@ -262,6 +291,12 @@ export function DiaryOCR() {
     try {
       const formData = new FormData()
       formData.append("file", uploadedFile)
+      if (selectedChild) formData.append("child_id", String(selectedChild.id))
+      else {
+        formData.append("child_name", childInfo.name.trim())
+        formData.append("child_age", childInfo.age)
+        formData.append("child_gender", childInfo.gender)
+      }
 
       const res = await fetch(`${apiBaseUrl}/diary-ocr`, {
         method: "POST",
@@ -289,6 +324,7 @@ export function DiaryOCR() {
         originalText: data?.original_text ?? "",
         createdAt: data?.created_at ?? "",
         weather: data?.weather ?? ocrResult?.weather ?? "맑음",
+        childName: effectiveChildName || data?.child_name || selectedChild?.name || "",
       }
 
       setSavedEntries((prev) => [entry, ...prev])
@@ -619,7 +655,7 @@ export function DiaryOCR() {
                           setIsSaved(true)
                           setTimeout(() => setIsSaved(false), 2000)
                         }}
-                        disabled={isSaving || isProcessing}
+                        disabled={!hasChildInfo || isSaving || isProcessing}
                       >
                         {isSaving ? (
                           <>
@@ -705,6 +741,12 @@ export function DiaryOCR() {
                           <Calendar className="h-3 w-3" />
                           {entry.date ? formatDate(entry.date) : "-"}
                         </span>
+                        {entry.childName && (
+                          <>
+                            <span className="text-xs text-slate-300">|</span>
+                            <span className="text-xs text-slate-500">{entry.childName}</span>
+                          </>
+                        )}
                       </div>
                       <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
                         {entry.extractedText}
