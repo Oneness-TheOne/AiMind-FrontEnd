@@ -16,6 +16,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Upload, ImageIcon, Pencil, Info, ArrowRight, X } from "lucide-react"
 import { DrawingCanvas } from "@/components/analysis/drawing-canvas"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 export default function AnalysisPage() {
   const router = useRouter()
@@ -35,6 +41,7 @@ export default function AnalysisPage() {
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [drawingSlotIndex, setDrawingSlotIndex] = useState<number | null>(null)
 
   useEffect(() => {
     const token =
@@ -234,25 +241,25 @@ export default function AnalysisPage() {
   }
 
   const handleSaveDrawing = async (imageData: string) => {
-    const emptyIndex = uploadedImages.findIndex((image) => !image.preview)
-    const targetIndex = emptyIndex === -1 ? 0 : emptyIndex
-    const filename = `${slotConfigs[targetIndex]?.label || "drawing"}.png`
+    if (drawingSlotIndex === null) return
+    
+    const filename = `${slotConfigs[drawingSlotIndex]?.label || "drawing"}.png`
     const file = dataUrlToFile(imageData, filename)
     try {
       const resized = await resizeImageFile(file)
       setUploadedImages((prev) => {
         const next = [...prev]
-        next[targetIndex] = resized
+        next[drawingSlotIndex] = resized
         return next
       })
     } catch {
       setUploadedImages((prev) => {
         const next = [...prev]
-        next[targetIndex] = { preview: imageData, file }
+        next[drawingSlotIndex] = { preview: imageData, file }
         return next
       })
     }
-    setInputMode("upload")
+    setDrawingSlotIndex(null)
   }
 
   const hasAllImages = uploadedImages.every((slot) => slot.file && slot.preview)
@@ -383,7 +390,80 @@ export default function AnalysisPage() {
                     </TabsContent>
                     
                     <TabsContent value="draw" className="mt-0">
-                      <DrawingCanvas onSave={handleSaveDrawing} />
+                      <div className="grid gap-4 md:grid-cols-2">
+                        {slotConfigs.map((slot, index) => {
+                          const hasImage = uploadedImages[index]?.preview
+                          return (
+                            <div
+                              key={index}
+                              className={`border-2 rounded-xl p-4 transition-colors ${
+                                hasImage
+                                  ? "border-primary/50 bg-primary/5"
+                                  : "border-border hover:border-primary/50"
+                              }`}
+                            >
+                              <div className="flex flex-col items-center gap-3 py-4">
+                                {hasImage ? (
+                                  <>
+                                    <img
+                                      src={uploadedImages[index].preview!}
+                                      alt={`${slot.label} 그림`}
+                                      className="w-full rounded-lg border object-contain max-h-[200px]"
+                                    />
+                                    <div className="flex gap-2 w-full">
+                                      <Button
+                                        variant="outline"
+                                        className="flex-1"
+                                        onClick={() => {
+                                          setUploadedImages((prev) => {
+                                            const next = [...prev]
+                                            next[index] = { preview: null, file: null }
+                                            return next
+                                          })
+                                        }}
+                                      >
+                                        <X className="h-4 w-4 mr-2" />
+                                        삭제
+                                      </Button>
+                                      <Button
+                                        className="flex-1"
+                                        onClick={() => setDrawingSlotIndex(index)}
+                                      >
+                                        <Pencil className="h-4 w-4 mr-2" />
+                                        다시 그리기
+                                      </Button>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
+                                      <Pencil className="h-8 w-8 text-primary" />
+                                    </div>
+                                    <div className="text-center">
+                                      <p className="font-medium text-foreground mb-1">
+                                        {index + 1}번 · {slot.label}
+                                      </p>
+                                      <p className="text-xs text-muted-foreground">
+                                        그림을 그려주세요
+                                      </p>
+                                    </div>
+                                    <Button
+                                      className="w-full"
+                                      onClick={() => setDrawingSlotIndex(index)}
+                                    >
+                                      <Pencil className="h-4 w-4 mr-2" />
+                                      그리기 시작
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                      <p className="mt-4 text-xs text-muted-foreground text-center">
+                        각 그림을 클릭하여 그릴 수 있습니다. 검정 펜으로 그려주세요.
+                      </p>
                     </TabsContent>
                   </Tabs>
                 </CardContent>
@@ -542,6 +622,28 @@ export default function AnalysisPage() {
         </div>
       </main>
       <Footer />
+
+      {/* Drawing Dialog */}
+      <Dialog open={drawingSlotIndex !== null} onOpenChange={(open) => !open && setDrawingSlotIndex(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {drawingSlotIndex !== null && slotConfigs[drawingSlotIndex]
+                ? `${slotConfigs[drawingSlotIndex].label} 그리기`
+                : "그림 그리기"}
+            </DialogTitle>
+          </DialogHeader>
+          {drawingSlotIndex !== null && (
+            <DrawingCanvas
+              onSave={handleSaveDrawing}
+              onCancel={() => setDrawingSlotIndex(null)}
+              width={800}
+              height={600}
+              title={slotConfigs[drawingSlotIndex]?.label}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

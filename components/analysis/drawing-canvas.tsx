@@ -6,47 +6,26 @@ import { useRef, useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
-import {
   Pencil,
   Eraser,
   Undo2,
   Redo2,
   Trash2,
   Download,
-  Palette,
-  Circle,
 } from "lucide-react"
 
 interface DrawingCanvasProps {
   onSave: (imageData: string) => void
+  onCancel?: () => void
   width?: number
   height?: number
+  title?: string
 }
 
-const COLORS = [
-  "#000000", // Black
-  "#374151", // Gray
-  "#DC2626", // Red
-  "#EA580C", // Orange
-  "#CA8A04", // Yellow
-  "#16A34A", // Green
-  "#0891B2", // Cyan
-  "#2563EB", // Blue
-  "#7C3AED", // Purple
-  "#DB2777", // Pink
-  "#78350F", // Brown
-  "#FFFFFF", // White
-]
-
-export function DrawingCanvas({ onSave, width = 500, height = 400 }: DrawingCanvasProps) {
+export function DrawingCanvas({ onSave, onCancel, width = 500, height = 400, title }: DrawingCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [isDrawing, setIsDrawing] = useState(false)
   const [tool, setTool] = useState<"pencil" | "eraser">("pencil")
-  const [color, setColor] = useState("#000000")
   const [brushSize, setBrushSize] = useState(4)
   const [history, setHistory] = useState<ImageData[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
@@ -125,7 +104,7 @@ export function DrawingCanvas({ onSave, width = 500, height = 400 }: DrawingCanv
 
     ctx.beginPath()
     ctx.arc(pos.x, pos.y, brushSize / 2, 0, Math.PI * 2)
-    ctx.fillStyle = tool === "eraser" ? "#FFFFFF" : color
+    ctx.fillStyle = tool === "eraser" ? "#FFFFFF" : "#000000"
     ctx.fill()
   }
 
@@ -144,7 +123,7 @@ export function DrawingCanvas({ onSave, width = 500, height = 400 }: DrawingCanv
     ctx.beginPath()
     ctx.moveTo(lastPosRef.current.x, lastPosRef.current.y)
     ctx.lineTo(pos.x, pos.y)
-    ctx.strokeStyle = tool === "eraser" ? "#FFFFFF" : color
+    ctx.strokeStyle = tool === "eraser" ? "#FFFFFF" : "#000000"
     ctx.lineWidth = brushSize
     ctx.lineCap = "round"
     ctx.lineJoin = "round"
@@ -222,6 +201,12 @@ export function DrawingCanvas({ onSave, width = 500, height = 400 }: DrawingCanv
 
   return (
     <div className="space-y-4">
+      {title && (
+        <div className="text-center">
+          <h3 className="text-lg font-semibold text-foreground">{title}</h3>
+        </div>
+      )}
+      
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2 p-3 bg-secondary/50 rounded-lg">
         {/* Tools */}
@@ -244,56 +229,19 @@ export function DrawingCanvas({ onSave, width = 500, height = 400 }: DrawingCanv
           </Button>
         </div>
 
-        {/* Color Picker */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative" title="색상 선택">
-              <Palette className="h-4 w-4" />
-              <div
-                className="absolute bottom-1 right-1 h-2 w-2 rounded-full border border-white"
-                style={{ backgroundColor: color }}
-              />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-3">
-            <div className="grid grid-cols-6 gap-2">
-              {COLORS.map((c) => (
-                <button
-                  key={c}
-                  className={`h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 ${
-                    color === c ? "border-primary ring-2 ring-primary/30" : "border-border"
-                  }`}
-                  style={{ backgroundColor: c }}
-                  onClick={() => setColor(c)}
-                />
-              ))}
-            </div>
-          </PopoverContent>
-        </Popover>
-
         {/* Brush Size */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="ghost" size="icon" title="브러시 크기">
-              <Circle className="h-4 w-4" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-48 p-3">
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>브러시 크기</span>
-                <span>{brushSize}px</span>
-              </div>
-              <Slider
-                value={[brushSize]}
-                onValueChange={([value]) => setBrushSize(value)}
-                min={1}
-                max={30}
-                step={1}
-              />
-            </div>
-          </PopoverContent>
-        </Popover>
+        <div className="flex items-center gap-2 border-r border-border pr-2 mr-2">
+          <span className="text-sm text-muted-foreground">크기:</span>
+          <Slider
+            value={[brushSize]}
+            onValueChange={([value]) => setBrushSize(value)}
+            min={1}
+            max={20}
+            step={1}
+            className="w-24"
+          />
+          <span className="text-sm text-muted-foreground min-w-[2rem]">{brushSize}px</span>
+        </div>
 
         <div className="border-l border-border pl-2 ml-2 flex items-center gap-1">
           {/* Undo/Redo */}
@@ -322,10 +270,6 @@ export function DrawingCanvas({ onSave, width = 500, height = 400 }: DrawingCanv
           <Button variant="ghost" size="icon" onClick={clearCanvas} title="전체 지우기">
             <Trash2 className="h-4 w-4" />
           </Button>
-          {/* Download */}
-          <Button variant="ghost" size="icon" onClick={downloadImage} title="이미지 다운로드">
-            <Download className="h-4 w-4" />
-          </Button>
         </div>
       </div>
 
@@ -346,10 +290,17 @@ export function DrawingCanvas({ onSave, width = 500, height = 400 }: DrawingCanv
         />
       </div>
 
-      {/* Save Button */}
-      <Button onClick={handleSave} className="w-full">
-        이 그림으로 분석하기
-      </Button>
+      {/* Save/Cancel Buttons */}
+      <div className="flex gap-2">
+        {onCancel && (
+          <Button variant="outline" onClick={onCancel} className="flex-1">
+            취소
+          </Button>
+        )}
+        <Button onClick={handleSave} className="flex-1">
+          저장하기
+        </Button>
+      </div>
     </div>
   )
 }
