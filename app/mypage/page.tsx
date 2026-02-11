@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Pagination } from "@/components/ui/pagination-simple";
-import { DiaryOCR } from "@/components/mypage/diary-ocr";
 import {
   User,
   Settings,
@@ -26,6 +25,9 @@ import {
   Share2,
   BarChart3,
   Check,
+  Sun,
+  Copy,
+  ImageIcon,
 } from "lucide-react";
 import {
   Dialog,
@@ -92,6 +94,17 @@ export interface ChildItem {
   created_at: string | null;
 }
 
+/** 저장된 그림일기 1건 */
+interface DiaryEntry {
+  id: string;
+  imageUrl: string;
+  extractedText: string;
+  date: string;
+  title: string;
+  weather?: string;
+  childName?: string;
+}
+
 function mapDrawingToHistory(d: DrawingAnalysisItem): AnalysisHistory {
   const created = d.created_at ? new Date(d.created_at) : new Date();
   const dateStr = Number.isNaN(created.getTime())
@@ -147,6 +160,7 @@ const developmentData = [
 ];
 
 const ITEMS_PER_PAGE = 3;
+const DIARY_ITEMS_PER_PAGE = 4;
 
 export default function MyPage() {
   const router = useRouter();
@@ -172,6 +186,12 @@ export default function MyPage() {
     gender: "",
   });
   const [addChildSubmitting, setAddChildSubmitting] = useState(false);
+  const [diaryEntries, setDiaryEntries] = useState<DiaryEntry[]>([]);
+  const [diaryLoading, setDiaryLoading] = useState(false);
+  const [diaryPage, setDiaryPage] = useState(1);
+  const [selectedDiaryEntry, setSelectedDiaryEntry] =
+    useState<DiaryEntry | null>(null);
+  const [diaryDetailOpen, setDiaryDetailOpen] = useState(false);
   const apiBaseUrl =
     process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
@@ -200,6 +220,35 @@ export default function MyPage() {
     1,
     Math.ceil(filteredAnalysisHistoryList.length / ITEMS_PER_PAGE),
   );
+
+  /** 선택된 아이에 해당하는 그림일기만 필터링 */
+  const filteredDiaryEntries =
+    selectedChildId && selectedChild
+      ? diaryEntries.filter(
+          (e) => (e.childName ?? "").trim() === selectedChild.name,
+        )
+      : diaryEntries;
+
+  const totalDiaryPages = Math.max(
+    1,
+    Math.ceil(filteredDiaryEntries.length / DIARY_ITEMS_PER_PAGE),
+  );
+  const paginatedDiaryEntries = filteredDiaryEntries.slice(
+    (diaryPage - 1) * DIARY_ITEMS_PER_PAGE,
+    diaryPage * DIARY_ITEMS_PER_PAGE,
+  );
+
+  const formatDiaryDate = (dateStr: string) => {
+    if (!dateStr) return "-";
+    try {
+      const d = new Date(dateStr);
+      const days = ["일", "월", "화", "수", "목", "금", "토"];
+      return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 ${days[d.getDay()]}요일`;
+    } catch {
+      return dateStr;
+    }
+  };
+
   const paginatedHistory = filteredAnalysisHistoryList.slice(
     (historyPage - 1) * ITEMS_PER_PAGE,
     historyPage * ITEMS_PER_PAGE,
@@ -478,6 +527,53 @@ export default function MyPage() {
     };
   }, [apiBaseUrl, userId]);
 
+  useEffect(() => {
+    if (userId == null) {
+      setDiaryEntries([]);
+      return;
+    }
+    const token =
+      typeof window !== "undefined"
+        ? localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token")
+        : null;
+    if (!token) {
+      setDiaryEntries([]);
+      return;
+    }
+    let cancelled = false;
+    setDiaryLoading(true);
+    fetch(`${apiBaseUrl}/diary-ocr`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data: unknown[]) => {
+        if (!cancelled && Array.isArray(data)) {
+          const normalized: DiaryEntry[] = data.map((d) => {
+            const item = d as Record<string, unknown>;
+            return {
+            id: String(item?.id ?? ""),
+            imageUrl: String(item?.image_url ?? ""),
+            extractedText: String(item?.corrected_text ?? item?.original_text ?? ""),
+            date: String(item?.date ?? ""),
+            title: String(item?.title ?? ""),
+            weather: item?.weather as string | undefined,
+            childName: item?.child_name as string | undefined,
+          };
+          });
+          setDiaryEntries(normalized);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setDiaryEntries([]);
+      })
+      .finally(() => {
+        if (!cancelled) setDiaryLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBaseUrl, userId]);
+
   return (
     <div className="min-h-screen bg-white flex flex-col">
       <Header />
@@ -734,6 +830,7 @@ export default function MyPage() {
             onValueChange={(v) => {
               setActiveTab(v);
               setHistoryPage(1);
+              setDiaryPage(1);
             }}
           >
             <TabsList
@@ -1024,9 +1121,205 @@ export default function MyPage() {
               )}
             </TabsContent>
 
-            {/* Diary Tab */}
+            {/* Diary Tab - 저장된 그림일기만 카드 그리드로 표시 */}
             <TabsContent value="diary">
-              <DiaryOCR />
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-800">
+                    {selectedChild
+                      ? `${selectedChild.name}의 저장된 그림일기`
+                      : "저장된 그림일기"}
+                  </h2>
+                  <p className="text-sm text-slate-500 mt-1">
+                    총 {filteredDiaryEntries.length}개의 그림일기
+                  </p>
+                </div>
+                <Link href="/diary-ocr">
+                  <Button className="gap-2">
+                    <BookOpen className="h-4 w-4" />
+                    그림일기 추출하기
+                  </Button>
+                </Link>
+              </div>
+
+              {diaryLoading ? (
+                <p className="text-sm text-slate-500 py-12">
+                  그림일기 불러오는 중...
+                </p>
+              ) : userId == null ? (
+                <p className="text-sm text-slate-500 py-12">
+                  로그인하면 저장된 그림일기를 볼 수 있어요.
+                </p>
+              ) : filteredDiaryEntries.length === 0 ? (
+                <div className="text-center py-16 bg-slate-50 rounded-2xl">
+                  <BookOpen className="h-14 w-14 mx-auto mb-4 text-slate-300" />
+                  <p className="font-medium text-slate-600">
+                    저장된 그림일기가 없어요
+                  </p>
+                  <p className="text-sm text-slate-400 mt-1">
+                    그림일기 OCR 페이지에서 추출 후 저장해보세요
+                  </p>
+                  <Link href="/diary-ocr">
+                    <Button className="mt-4 gap-2">
+                      <Plus className="h-4 w-4" />
+                      그림일기 추출하러 가기
+                    </Button>
+                  </Link>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {paginatedDiaryEntries.map((entry) => (
+                      <div
+                        key={entry.id}
+                        onClick={() => {
+                          setSelectedDiaryEntry(entry);
+                          setDiaryDetailOpen(true);
+                        }}
+                        className="group bg-white rounded-2xl border border-slate-200 overflow-hidden hover:shadow-lg hover:border-teal-200 transition-all duration-300 cursor-pointer"
+                      >
+                        <div className="aspect-[4/3] bg-slate-100 overflow-hidden">
+                          <img
+                            src={entry.imageUrl || "/placeholder.svg"}
+                            alt={entry.title || "그림일기"}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                        </div>
+                        <div className="p-4">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <h3 className="font-semibold text-slate-800 truncate">
+                              {entry.title || "그림일기"}
+                            </h3>
+                            {entry.weather && (
+                              <span className="flex items-center gap-1 text-xs text-slate-500 shrink-0">
+                                <Sun className="h-3.5 w-3.5" />
+                                {entry.weather}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 text-xs text-slate-500 mb-2">
+                            <Calendar className="h-3 w-3 shrink-0" />
+                            {entry.date ? formatDiaryDate(entry.date) : "-"}
+                          </div>
+                          {entry.childName && (
+                            <p className="text-xs text-slate-400 truncate">
+                              {entry.childName}
+                            </p>
+                          )}
+                          <p className="text-sm text-slate-600 line-clamp-2 mt-1 leading-relaxed">
+                            {entry.extractedText}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {totalDiaryPages > 1 && (
+                    <div className="mt-6">
+                      <Pagination
+                        currentPage={diaryPage}
+                        totalPages={totalDiaryPages}
+                        onPageChange={setDiaryPage}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* 그림일기 상세 다이얼로그 */}
+              <Dialog open={diaryDetailOpen} onOpenChange={setDiaryDetailOpen}>
+                <DialogContent className="min-w-[900px] w-[95vw] max-w-[1600px] max-h-[90vh] overflow-y-auto">
+                  <div className="grid grid-cols-1 md:grid-cols-[1.15fr_0.85fr] gap-6">
+                    <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 flex flex-col min-h-0">
+                      <p className="text-xs font-semibold text-slate-500 mb-2 flex items-center gap-1">
+                        <ImageIcon className="h-3.5 w-3.5" />
+                        사진
+                      </p>
+                      <div className="flex-1 flex justify-center items-center min-h-[280px] md:min-h-[60vh] bg-white rounded-lg border border-slate-200 overflow-hidden">
+                        <img
+                          src={selectedDiaryEntry?.imageUrl || "/placeholder.svg"}
+                          alt="그림일기"
+                          className="w-full max-w-full max-h-[55vh] md:max-h-[75vh] object-contain"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-5 md:overflow-y-auto">
+                      <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-100 px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <BookOpen className="h-5 w-5 text-amber-600" />
+                          <span className="font-bold text-amber-800">
+                            그림일기
+                          </span>
+                          {selectedDiaryEntry?.childName && (
+                            <span className="text-sm text-amber-700">
+                              · {selectedDiaryEntry.childName}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-500 mb-1 flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            날짜
+                          </label>
+                          <p className="text-sm font-medium text-slate-800 py-2">
+                            {selectedDiaryEntry?.date
+                              ? formatDiaryDate(selectedDiaryEntry.date)
+                              : "-"}
+                          </p>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-500 mb-1 flex items-center gap-1">
+                            <Sun className="h-3 w-3" />
+                            날씨
+                          </label>
+                          <p className="py-2">
+                            {selectedDiaryEntry?.weather ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm bg-amber-50 text-amber-700">
+                                <Sun className="h-4 w-4" />
+                                {selectedDiaryEntry.weather}
+                              </span>
+                            ) : (
+                              <span className="text-sm text-slate-500">-</span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1 flex items-center gap-1">
+                          제목
+                        </label>
+                        <p className="text-base font-semibold text-slate-800 py-1">
+                          {selectedDiaryEntry?.title || "-"}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1.5 flex items-center gap-1">
+                          <BookOpen className="h-3 w-3" />
+                          내용
+                        </label>
+                        <div className="min-h-[120px] rounded-lg border border-slate-200 bg-slate-50/50 p-4 text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+                          {selectedDiaryEntry?.extractedText || "-"}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="mt-2 gap-1.5 text-teal-600"
+                          onClick={() =>
+                            selectedDiaryEntry &&
+                            navigator.clipboard.writeText(
+                              selectedDiaryEntry.extractedText,
+                            )
+                          }
+                        >
+                          <Copy className="h-4 w-4" />
+                          내용 복사
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </TabsContent>
           </Tabs>
         </div>
