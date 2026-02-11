@@ -10,8 +10,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogHeader,
-  DialogTitle
 } from "@/components/ui/dialog"
 import {
   Upload,
@@ -161,6 +159,7 @@ export function DiaryOCR({
           title: d?.title ?? "",
           originalText: d?.original_text ?? "",
           createdAt: d?.created_at ?? "",
+          weather: d?.weather ?? "",
           childName: d?.child_name ?? "",
         }))
         setSavedEntries(normalized)
@@ -274,8 +273,21 @@ export function DiaryOCR({
     setTimeout(() => setIsCopied(false), 2000)
   }
 
+  const dataUrlToFile = (dataUrl: string, filename: string): File => {
+    const [header, base64] = dataUrl.split(",")
+    const mimeMatch = header?.match(/data:(.*?);base64/)
+    const mime = mimeMatch ? mimeMatch[1] : "image/jpeg"
+    const binary = atob(base64 || "")
+    const array = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i += 1) array[i] = binary.charCodeAt(i)
+    return new File([array], filename, { type: mime })
+  }
+
   const handleSaveEntry = async () => {
-    if (!uploadedFile) return
+    if (!ocrResult) {
+      alert("텍스트를 추출한 뒤 저장해 주세요.")
+      return
+    }
     if (!hasChildInfo) {
       alert("아이를 선택하거나 이름·나이·성별을 입력해주세요.")
       return
@@ -286,16 +298,29 @@ export function DiaryOCR({
       alert("로그인이 필요합니다.")
       return
     }
+    const fileToSend =
+      ocrResult.imageDataUrl
+        ? dataUrlToFile(ocrResult.imageDataUrl, "diary-cropped.jpg")
+        : uploadedFile
+    if (!fileToSend) {
+      alert("저장할 이미지가 없습니다. 텍스트 추출을 먼저 해 주세요.")
+      return
+    }
     setIsSaving(true)
     setErrorMessage("")
     try {
       const formData = new FormData()
-      formData.append("file", uploadedFile)
-      if (selectedChild) formData.append("child_id", String(selectedChild.id))
-      else {
+      formData.append("file", fileToSend)
+      formData.append("date", ocrResult.date || "")
+      formData.append("title", ocrResult.title || "")
+      formData.append("original_text", ocrResult.original || "")
+      formData.append("corrected_text", extractedText || ocrResult.corrected || "")
+      formData.append("weather", ocrResult.weather || "맑음")
+      if (selectedChild) {
+        formData.append("child_id", String(selectedChild.id))
+        formData.append("child_name", effectiveChildName || selectedChild.name)
+      } else {
         formData.append("child_name", childInfo.name.trim())
-        formData.append("child_age", childInfo.age)
-        formData.append("child_gender", childInfo.gender)
       }
 
       const res = await fetch(`${apiBaseUrl}/diary-ocr`, {
@@ -779,38 +804,90 @@ export function DiaryOCR({
       </div>
 
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{selectedEntry?.title || "그림일기"}</DialogTitle>
-            <DialogDescription className="flex flex-wrap gap-x-3 gap-y-1">
-              <span>날짜: {selectedEntry?.date || "-"}</span>
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-xl border border-slate-200 overflow-hidden bg-slate-50">
-              <img
-                src={selectedEntry?.imageUrl || "/placeholder.svg"}
-                alt="그림일기"
-                className="w-full h-full object-cover"
-              />
+        <DialogContent className="min-w-[900px] w-[95vw] max-w-[1600px] max-h-[90vh] overflow-y-auto">
+          {/* 모바일: 세로 배치 / 태블릿·데스크탑: 왼쪽 사진, 오른쪽 글 */}
+          <div className="grid grid-cols-1 md:grid-cols-[1.15fr_0.85fr] gap-6">
+            {/* 왼쪽(데스크탑·태블릿) 또는 위(모바일): 사진 */}
+            <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 order-1 md:order-1 flex flex-col min-h-0">
+              <p className="text-xs font-semibold text-slate-500 mb-2 flex items-center gap-1 shrink-0">
+                <ImageIcon className="h-3.5 w-3.5" />
+                사진
+              </p>
+              <div className="flex-1 flex justify-center items-center min-h-[280px] md:min-h-[60vh] bg-white rounded-lg border border-slate-200 overflow-hidden">
+                <img
+                  src={selectedEntry?.imageUrl || "/placeholder.svg"}
+                  alt="그림일기"
+                  className="w-full max-w-full max-h-[55vh] md:max-h-[75vh] object-contain"
+                />
+              </div>
             </div>
-            <div className="space-y-3">
-              <div className="text-sm font-medium text-slate-700">교정된 내용</div>
-              <Textarea
-                readOnly
-                value={selectedEntry?.extractedText || ""}
-                className="min-h-[220px] resize-none bg-white border-slate-200 rounded-xl"
-              />
-              {selectedEntry?.originalText ? (
-                <>
-                  <div className="text-sm font-medium text-slate-700">원본 텍스트</div>
-                  <Textarea
-                    readOnly
-                    value={selectedEntry.originalText}
-                    className="min-h-[140px] resize-none bg-slate-50 border-slate-200 rounded-xl"
-                  />
-                </>
-              ) : null}
+
+            {/* 오른쪽(데스크탑·태블릿) 또는 아래(모바일): 글 */}
+            <div className="space-y-5 order-2 md:order-2 md:overflow-y-auto">
+              <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-100 px-5 py-4">
+                <div className="flex items-center gap-3">
+                  <BookOpen className="h-5 w-5 text-amber-600" />
+                  <span className="font-bold text-amber-800">그림일기</span>
+                  {selectedEntry?.childName && (
+                    <span className="text-sm text-amber-700">· {selectedEntry.childName}</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1 flex items-center gap-1">
+                    <Calendar className="h-3 w-3" />
+                    날짜
+                  </label>
+                  <p className="text-sm font-medium text-slate-800 py-2">
+                    {selectedEntry?.date ? formatDate(selectedEntry.date) : "-"}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1 flex items-center gap-1">
+                    <Sun className="h-3 w-3" />
+                    날씨
+                  </label>
+                  <p className="py-2">
+                    {selectedEntry?.weather ? (
+                      (() => {
+                        const { icon: WIcon, color, bg } = getWeatherIcon(selectedEntry.weather)
+                        return (
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm ${bg} ${color}`}>
+                            <WIcon className="h-4 w-4" />
+                            {selectedEntry.weather}
+                          </span>
+                        )
+                      })()
+                    ) : (
+                      <span className="text-sm text-slate-500">-</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1 flex items-center gap-1">
+                  <Pencil className="h-3 w-3" />
+                  제목
+                </label>
+                <p className="text-base font-semibold text-slate-800 py-1">
+                  {selectedEntry?.title || "-"}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5 flex items-center gap-1">
+                  <BookOpen className="h-3 w-3" />
+                  내용
+                </label>
+                <div
+                  className="min-h-[120px] rounded-lg border border-slate-200 bg-slate-50/50 p-4 text-sm text-slate-700 whitespace-pre-wrap leading-relaxed"
+                >
+                  {selectedEntry?.extractedText || "-"}
+                </div>
+              </div>
             </div>
           </div>
         </DialogContent>
