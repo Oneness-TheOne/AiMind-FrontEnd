@@ -71,6 +71,7 @@ export default function AnalyzingPage() {
     const globalStore = globalThis as typeof globalThis & {
       __analysisPayload?: any
       __analysisFiles?: (File | null)[]
+      __analysisFetchStarted?: boolean
     }
     const payload = globalStore.__analysisPayload
     const files = globalStore.__analysisFiles || []
@@ -78,12 +79,19 @@ export default function AnalyzingPage() {
       router.push("/analysis")
       return
     }
+    // React Strict Mode 등에서 useEffect가 두 번 실행될 때 /analyze 중복 호출 방지
+    if (globalStore.__analysisFetchStarted) {
+      return
+    }
+    globalStore.__analysisFetchStarted = true
+
     const images: string[] = payload.images || []
     const slots: { label: string; objectKey: string }[] = payload.slots || []
     const childInfo = payload.childInfo || {}
 
     if (images.length !== 4 || slots.length !== 4 || images.some((img) => !img)) {
       setError("분석에 필요한 이미지가 부족합니다.")
+      globalStore.__analysisFetchStarted = false
       return
     }
 
@@ -206,6 +214,10 @@ export default function AnalyzingPage() {
       })
       .catch((err: Error) => {
         setError(err.message || "분석 요청 중 오류가 발생했습니다.")
+      })
+      .finally(() => {
+        const g = globalThis as typeof globalThis & { __analysisFetchStarted?: boolean }
+        g.__analysisFetchStarted = false
       })
   }, [router])
 
