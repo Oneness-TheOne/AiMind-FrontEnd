@@ -4,7 +4,6 @@ import React from "react"
 
 import { useState, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { VideoHero } from "@/components/shared/video-hero"
@@ -79,26 +78,27 @@ export default function AnalysisPage() {
     }
   }
 
+  const getWeightPath = (objectKey: string, gender: string) => {
+    const genderFolder = gender === "male" ? "male" : gender === "female" ? "female" : "male"
+    return `image_to_json/${objectKey}_weights/${genderFolder}/best.pt`
+  }
+
   const slotConfigs = [
     {
       objectKey: "tree",
       label: "나무",
-      weightPath: "C:\\Honey\\Projects\\mid-term\\AiMind-AiModels\\image_to_json\\tree_weights\\best.pt",
     },
     {
       objectKey: "house",
       label: "집",
-      weightPath: "C:\\Honey\\Projects\\mid-term\\AiMind-AiModels\\image_to_json\\house_weights\\weights\\best.pt",
     },
     {
       objectKey: "man",
       label: "남자사람",
-      weightPath: "C:\\Honey\\Projects\\mid-term\\AiMind-AiModels\\image_to_json\\man_weights\\best.pt",
     },
     {
       objectKey: "woman",
       label: "여자사람",
-      weightPath: "C:\\Honey\\Projects\\mid-term\\AiMind-AiModels\\image_to_json\\woman_weights\\best.pt",
     },
   ]
 
@@ -363,7 +363,7 @@ export default function AnalysisPage() {
                                       드래그하거나 클릭해서 선택
                                     </p>
                                     <p className="mt-1 text-[11px] text-muted-foreground">
-                                      {slot.weightPath}
+                                      {getWeightPath(slot.objectKey, childInfo.gender || "male")}
                                     </p>
                                   </div>
                                   <input
