@@ -1228,6 +1228,7 @@ export default function MyPage() {
               {/* 그림일기 상세 다이얼로그 */}
               <Dialog open={diaryDetailOpen} onOpenChange={setDiaryDetailOpen}>
                 <DialogContent className="min-w-[900px] w-[95vw] max-w-[1600px] max-h-[90vh] overflow-y-auto">
+                  <DialogTitle className="sr-only">그림일기 상세보기</DialogTitle>
                   <div className="grid grid-cols-1 md:grid-cols-[1.15fr_0.85fr] gap-6">
                     <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 flex flex-col min-h-0">
                       <p className="text-xs font-semibold text-slate-500 mb-2 flex items-center gap-1">

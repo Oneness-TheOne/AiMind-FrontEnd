@@ -10,6 +10,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogTitle,
 } from "@/components/ui/dialog"
 import {
   Upload,
@@ -805,6 +806,7 @@ export function DiaryOCR({
 
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
         <DialogContent className="min-w-[900px] w-[95vw] max-w-[1600px] max-h-[90vh] overflow-y-auto">
+          <DialogTitle className="sr-only">그림일기 상세보기</DialogTitle>
           {/* 모바일: 세로 배치 / 태블릿·데스크탑: 왼쪽 사진, 오른쪽 글 */}
           <div className="grid grid-cols-1 md:grid-cols-[1.15fr_0.85fr] gap-6">
             {/* 왼쪽(데스크탑·태블릿) 또는 위(모바일): 사진 */}
