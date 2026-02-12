@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Search,
   MapPin,
@@ -136,6 +137,239 @@ interface Center {
 }
 
 type AnyRecord = Record<string, unknown>;
+
+type OpenApiMarkerPoint = {
+  id: string;
+  lat: number;
+  lng: number;
+  title: string;
+  url?: string;
+};
+
+function rowsFromAnyJson(json: unknown): unknown[] {
+  const base = rowsFromJson(json);
+  if (base.length > 0) return base;
+  if (json && typeof json === "object") {
+    const obj = json as AnyRecord;
+    if (Array.isArray(obj.documents)) return obj.documents;
+    if (Array.isArray(obj.results)) return obj.results;
+    if (Array.isArray(obj.result)) return obj.result;
+  }
+  return [];
+}
+
+function normalizeInputUrl(raw: string): string | null {
+  let s = raw.trim();
+  if (!s) return null;
+
+  // 코드에서 복사해 붙여넣는 경우: 따옴표/괄호/쉼표/세미콜론 등을 제거
+  s = s.replace(/^[\s"'`([{<]+/, "");
+  s = s.replace(/[\s"'`)\]}>]+$/, "");
+  // 끝에 붙는 흔한 구분자 제거(예: "http://a.com",)
+  while (s && /[.,;:)\]]$/.test(s)) {
+    s = s.slice(0, -1);
+  }
+
+  // URL 내부 공백 제거 (예: "http://www. 톡톡톡.com")
+  s = s.replace(/\s+/g, "");
+  if (!s) return null;
+
+  if (/^https?:\/\//i.test(s)) return s;
+  if (s.startsWith("//")) return `https:${s}`;
+  if (s.startsWith("www.")) return `https://${s}`;
+  if (/^[\p{L}\p{N}.-]+\.[\p{L}]{2,}(\/.*)?$/iu.test(s)) return `https://${s}`;
+  return null;
+}
+
+function parseUrlsFromText(text: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+
+  const add = (raw: string) => {
+    const u = normalizeInputUrl(raw);
+    if (!u) return;
+    // 지도 SDK 같은 무관 URL은 제외
+    if (/dapi\.kakao\.com\/v2\/maps\/sdk\.js/i.test(u)) return;
+    const key = u.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(u);
+  };
+
+  // 1) https?:// 형태를 우선 추출
+  for (const m of text.matchAll(/https?:\/\/[^\s"'`<>()[\]{}]+/gi)) {
+    add(m[0]);
+  }
+  // 2) www. 로 시작하는 URL 추출
+  for (const m of text.matchAll(/\bwww\.[^\s"'`<>()[\]{}]+/gi)) {
+    add(m[0]);
+  }
+  // 3) 그 외(한글 도메인 등) 토큰 기반 추출
+  const parts = text.split(/\s+/g).flatMap((t) => t.split(/[,;]/g));
+  for (const p of parts) add(p);
+
+  return out;
+}
+
+function openApiMarkerFromRecord(
+  rec: AnyRecord,
+): Omit<OpenApiMarkerPoint, "id"> | null {
+  const sources = collectRecordSources(rec);
+  const lat =
+    pickNumberFromSources(sources, [
+      "WGS84위도",
+      "WGS84 위도",
+      "위도",
+      "lat",
+      "latitude",
+      "y",
+      "REFINE_WGS84_LAT",
+    ]) ?? pickNumberByRegexFromSources(sources, /위도|lat|latitude/i);
+  const lng =
+    pickNumberFromSources(sources, [
+      "WGS84경도",
+      "WGS84 경도",
+      "경도",
+      "lng",
+      "lon",
+      "longitude",
+      "x",
+      "REFINE_WGS84_LOGT",
+      "REFINE_WGS84_LONG",
+    ]) ??
+    pickNumberByRegexFromSources(sources, /경도|lng|lon|longitude|logt|x/i);
+
+  const latOk = lat !== undefined && lat >= -90 && lat <= 90 ? lat : undefined;
+  const lngOk =
+    lng !== undefined && lng >= -180 && lng <= 180 ? lng : undefined;
+  if (latOk === undefined || lngOk === undefined) return null;
+
+  const title =
+    pickStringFromSources(sources, [
+      "name",
+      "title",
+      "place_name",
+      "상담소명",
+      "시설명",
+      "기관명",
+      "센터명",
+    ]) ?? "OpenAPI";
+  const urlRaw =
+    pickStringFromSources(sources, [
+      "url",
+      "URI",
+      "uri",
+      "homepage",
+      "homePage",
+      "place_url",
+      "홈페이지",
+      "홈페이지URL",
+      "홈페이지 URL",
+    ]) ??
+    pickStringByRegexFromSources(sources, /홈페이지|home\s?page|website|url/i);
+  const url =
+    urlRaw && /^https?:\/\//i.test(urlRaw.trim()) ? urlRaw.trim() : undefined;
+
+  return { lat: latOk, lng: lngOk, title, url };
+}
+
+function extractOpenApiMarkers(
+  json: unknown,
+): Array<Omit<OpenApiMarkerPoint, "id">> {
+  const rows = rowsFromAnyJson(json);
+  const points: Array<Omit<OpenApiMarkerPoint, "id">> = [];
+
+  const tryPush = (value: unknown) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return;
+    const rec = value as AnyRecord;
+    const p = openApiMarkerFromRecord(rec);
+    if (p) points.push(p);
+  };
+
+  if (rows.length > 0) {
+    for (const item of rows) tryPush(item);
+    return points;
+  }
+
+  tryPush(json);
+  return points;
+}
+
+type OpenApiGeocodeTask = { address: string; title: string; url?: string };
+
+function openApiGeocodeTaskFromRecord(
+  rec: AnyRecord,
+): OpenApiGeocodeTask | null {
+  // 이미 좌표가 있으면 task 불필요
+  if (openApiMarkerFromRecord(rec)) return null;
+  const sources = collectRecordSources(rec);
+  const addressRaw =
+    pickStringFromSources(sources, [
+      "주소",
+      "소재지도로명주소",
+      "소재지지번주소",
+      "도로명주소",
+      "지번주소",
+      "소재지",
+      "roadAddress",
+      "address",
+      "rdnmadr",
+      "lnmadr",
+      "REFINE_ROADNM_ADDR",
+      "REFINE_LOTNO_ADDR",
+    ]) ?? pickStringByRegexFromSources(sources, /주소|addr/i);
+  const address = addressRaw?.trim() || "";
+  if (!address) return null;
+
+  const title =
+    pickStringFromSources(sources, [
+      "name",
+      "title",
+      "place_name",
+      "상담소명",
+      "시설명",
+      "기관명",
+      "센터명",
+      "사업장명",
+    ]) || address;
+  const urlRaw =
+    pickStringFromSources(sources, [
+      "url",
+      "URI",
+      "uri",
+      "homepage",
+      "homePage",
+      "place_url",
+      "홈페이지",
+      "홈페이지URL",
+      "홈페이지 URL",
+    ]) ??
+    pickStringByRegexFromSources(sources, /홈페이지|home\s?page|website|url/i);
+  const url =
+    urlRaw && /^https?:\/\//i.test(urlRaw.trim()) ? urlRaw.trim() : undefined;
+
+  return { address, title, url };
+}
+
+function extractOpenApiGeocodeTasks(json: unknown): OpenApiGeocodeTask[] {
+  const rows = rowsFromAnyJson(json);
+  const tasks: OpenApiGeocodeTask[] = [];
+
+  const tryPush = (value: unknown) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return;
+    const rec = value as AnyRecord;
+    const t = openApiGeocodeTaskFromRecord(rec);
+    if (t) tasks.push(t);
+  };
+
+  if (rows.length > 0) {
+    for (const item of rows) tryPush(item);
+    return tasks;
+  }
+
+  tryPush(json);
+  return tasks;
+}
 
 function toText(value: unknown): string | undefined {
   if (typeof value === "string") {
@@ -712,6 +946,18 @@ function normalizeOpenApiRow(
       "WELFARE_FACLT_TELNO",
     ]) || "";
 
+  // 사용자 요청: 이미지에 표시된 특정 항목은 목록/지도에서 제거합니다.
+  // (?라지역아동센터 / 의정부시 평화로 449 3층 / 031-875-3009)
+  const phoneDigitsForBlock = phone.replace(/[^\d]/g, "");
+  const addrNormForBlock = address.replace(/\s+/g, " ").trim();
+  if (
+    name.trim() === "?라지역아동센터" &&
+    (phoneDigitsForBlock === "0318753009" ||
+      addrNormForBlock.includes("평화로 449"))
+  ) {
+    return null;
+  }
+
   const homepageRaw =
     pickStringFromSources(sources, [
       "홈페이지URL",
@@ -1275,13 +1521,148 @@ export default function CounselingPage() {
     total: number;
   } | null>(null);
 
+  // 좌표 자동 보완(지오코딩/검색) 결과를 브라우저에 캐시해 재방문 시 바로 표시합니다.
+  const GEO_CACHE_KEY = "aimind:geocode-cache:v1";
+  const [geoCacheReady, setGeoCacheReady] = useState(false);
+  const geoCacheRef = useRef<Record<string, { lat: number; lng: number }>>({});
+  const geoCacheFlushTimerRef = useRef<number | null>(null);
+
+  const [openApiUrlsText, setOpenApiUrlsText] = useState("");
+  const [openApiMarkers, setOpenApiMarkers] = useState<OpenApiMarkerPoint[]>(
+    [],
+  );
+  const [openApiMarkersError, setOpenApiMarkersError] = useState<string | null>(
+    null,
+  );
+  const [isLoadingOpenApiMarkers, setIsLoadingOpenApiMarkers] = useState(false);
+  const [isOpenApiMode, setIsOpenApiMode] = useState(false);
+
+  const openApiAbortRef = useRef<AbortController | null>(null);
+  const openApiRunIdRef = useRef(0);
+  const openApiBoundsRef = useRef<KakaoLatLngBounds | null>(null);
+  const openApiFitTimerRef = useRef<number | null>(null);
+  const openApiRenderedCountRef = useRef(0);
+  const openApiMapMarkersRef = useRef<KakaoMarker[]>([]);
+
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<KakaoMap | null>(null);
   const markersRef = useRef<KakaoMarker[]>([]);
+  const markerByCenterIdRef = useRef<Map<string, KakaoMarker>>(new Map());
+  const renderedMarkerIdsRef = useRef<Set<string>>(new Set());
   const clustererRef = useRef<KakaoMarkerClusterer | null>(null);
   const infoWindowRef = useRef<KakaoInfoWindow | null>(null);
   const geocodedIdsRef = useRef<Set<string>>(new Set());
   const isGeocodingRef = useRef(false);
+
+  const geoCacheKeyFor = (name: string, address: string) =>
+    `${name.trim()}|${address.trim()}`.toLowerCase();
+
+  const applyGeoCacheToCenters = (centers: Center[]): Center[] => {
+    const cache = geoCacheRef.current;
+    if (!cache) return centers;
+    if (Object.keys(cache).length === 0) return centers;
+    return centers.map((c) => {
+      if (c.lat != null && c.lng != null) return c;
+      const key = geoCacheKeyFor(c.name, c.address);
+      const hit = cache[key];
+      return hit ? { ...c, lat: hit.lat, lng: hit.lng } : c;
+    });
+  };
+
+  const scheduleGeoCacheFlush = () => {
+    if (geoCacheFlushTimerRef.current != null) return;
+    geoCacheFlushTimerRef.current = window.setTimeout(() => {
+      geoCacheFlushTimerRef.current = null;
+      try {
+        localStorage.setItem(
+          GEO_CACHE_KEY,
+          JSON.stringify(geoCacheRef.current),
+        );
+      } catch {
+        // ignore
+      }
+    }, 800);
+  };
+
+  const storeGeoCache = (
+    center: Center,
+    coords: { lat: number; lng: number },
+  ) => {
+    if (!center.address) return;
+    const key = geoCacheKeyFor(center.name, center.address);
+    if (!key) return;
+    geoCacheRef.current[key] = coords;
+    scheduleGeoCacheFlush();
+  };
+
+  useEffect(() => {
+    return () => {
+      try {
+        openApiAbortRef.current?.abort();
+      } catch {
+        // ignore
+      }
+      try {
+        if (openApiFitTimerRef.current != null) {
+          window.clearTimeout(openApiFitTimerRef.current);
+          openApiFitTimerRef.current = null;
+        }
+      } catch {
+        // ignore
+      }
+      try {
+        if (geoCacheFlushTimerRef.current != null) {
+          window.clearTimeout(geoCacheFlushTimerRef.current);
+          geoCacheFlushTimerRef.current = null;
+        }
+      } catch {
+        // ignore
+      }
+    };
+  }, []);
+
+  // 지오코딩 캐시 로드(재방문 시 즉시 마커 표시)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(GEO_CACHE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as unknown;
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          const next: Record<string, { lat: number; lng: number }> = {};
+          for (const [k, v] of Object.entries(
+            parsed as Record<string, unknown>,
+          )) {
+            if (!k) continue;
+            if (!v || typeof v !== "object" || Array.isArray(v)) continue;
+            const vv = v as Record<string, unknown>;
+            const lat =
+              typeof vv.lat === "number"
+                ? vv.lat
+                : typeof vv.lat === "string"
+                  ? Number.parseFloat(vv.lat)
+                  : NaN;
+            const lng =
+              typeof vv.lng === "number"
+                ? vv.lng
+                : typeof vv.lng === "string"
+                  ? Number.parseFloat(vv.lng)
+                  : NaN;
+            if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+            if (lat < -90 || lat > 90 || lng < -180 || lng > 180) continue;
+            next[k] = { lat, lng };
+          }
+          geoCacheRef.current = next;
+          // 이미 로드된 데이터에도 캐시를 즉시 적용
+          setPublicCenters((prev) => applyGeoCacheToCenters(prev));
+          setPublicChildCenters((prev) => applyGeoCacheToCenters(prev));
+        }
+      }
+    } catch {
+      // ignore
+    } finally {
+      setGeoCacheReady(true);
+    }
+  }, []);
 
   // 브라우저 위치 권한이 허용되면 "거리순" 정렬/표시에 사용할 수 있도록 현재 위치를 가져옵니다.
   useEffect(() => {
@@ -1502,11 +1883,10 @@ export default function CounselingPage() {
     sortBy,
   ]);
 
-  // 좌표가 없는 데이터는 지도에 표시되지 않으므로 목록에서도 제외합니다.
-  const visibleCenters = useMemo(
-    () => filteredCenters.filter((c) => c.lat != null && c.lng != null),
-    [filteredCenters],
-  );
+  // 필터/검색 결과는 목록에서 모두 노출합니다.
+  // 좌표가 없는 항목은 지도에 표시되지 않지만, (가능하면) 주소 지오코딩으로 좌표를 채워
+  // 지도 마커로 표시될 수 있도록 별도 effect에서 처리합니다.
+  const visibleCenters = useMemo(() => filteredCenters, [filteredCenters]);
   const isTruncatedCenters = false;
   const markerableVisibleCount = useMemo(
     () => visibleCenters.filter((c) => c.lat != null && c.lng != null).length,
@@ -1529,6 +1909,497 @@ export default function CounselingPage() {
     }
     return `${visibleCenters.length}:${h >>> 0}`;
   }, [visibleCenters]);
+
+  const loadMarkersFromOpenApi = async () => {
+    const urls = parseUrlsFromText(openApiUrlsText);
+    if (urls.length === 0) {
+      setOpenApiMarkersError("URI를 입력해주세요.");
+      setOpenApiMarkers([]);
+      return;
+    }
+
+    try {
+      openApiAbortRef.current?.abort();
+    } catch {
+      // ignore
+    }
+
+    const controller = new AbortController();
+    openApiAbortRef.current = controller;
+    const runId = (openApiRunIdRef.current += 1);
+
+    setIsLoadingOpenApiMarkers(true);
+    setOpenApiMarkersError(null);
+    setOpenApiMarkers([]);
+    setIsOpenApiMode(true);
+
+    // 기존(로컬/이전 OpenAPI) 마커를 모두 제거하고 OpenAPI 모드로 전환합니다.
+    openApiRenderedCountRef.current = 0;
+    openApiBoundsRef.current = null;
+    try {
+      if (openApiFitTimerRef.current != null) {
+        window.clearTimeout(openApiFitTimerRef.current);
+        openApiFitTimerRef.current = null;
+      }
+    } catch {
+      // ignore
+    }
+    try {
+      openApiMapMarkersRef.current.forEach((m) => m.setMap(null));
+    } catch {
+      // ignore
+    }
+    openApiMapMarkersRef.current = [];
+
+    try {
+      clustererRef.current?.clear();
+    } catch {
+      // ignore
+    }
+    try {
+      markersRef.current.forEach((m) => m.setMap(null));
+    } catch {
+      // ignore
+    }
+    markersRef.current = [];
+    markerByCenterIdRef.current.clear();
+    renderedMarkerIdsRef.current.clear();
+    try {
+      infoWindowRef.current?.close();
+    } catch {
+      // ignore
+    }
+
+    let seq = 0;
+    let addedCount = 0;
+    const seen = new Set<string>();
+
+    let pending: OpenApiMarkerPoint[] = [];
+    let flushTimer: number | null = null;
+
+    const flushPending = () => {
+      if (pending.length === 0) return;
+      const batch = pending;
+      pending = [];
+      setOpenApiMarkers((prev) => prev.concat(batch));
+    };
+
+    const enqueuePoints = (pts: Array<Omit<OpenApiMarkerPoint, "id">>) => {
+      for (const p of pts) {
+        const key = `${p.lat.toFixed(6)},${p.lng.toFixed(6)},${p.title}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        pending.push({
+          id: `openapi-${seq++}`,
+          lat: p.lat,
+          lng: p.lng,
+          title: p.title,
+          url: p.url,
+        });
+        addedCount += 1;
+      }
+
+      if (flushTimer == null) {
+        flushTimer = window.setTimeout(() => {
+          flushTimer = null;
+          flushPending();
+        }, 80);
+      }
+    };
+
+    type FallbackTask = { url: string; keyword: string };
+    const fallbackQueue: FallbackTask[] = [];
+    const fallbackSeen = new Set<string>();
+    let streamDone = false;
+
+    const cleanKeyword = (raw: string) =>
+      raw
+        .replace(/\s+/g, " ")
+        .replace(/\u00a0/g, " ")
+        .trim()
+        .replace(/\s*[:：]\s*네이버\s*블로그\s*$/i, "")
+        .replace(/\s*-\s*네이버\s*블로그\s*$/i, "")
+        .replace(/\s*[:：]\s*NAVER\s*Blog\s*$/i, "")
+        .replace(/\s*-\s*NAVER\s*Blog\s*$/i, "")
+        .replace(/\s*\|\s*.*$/, "")
+        .trim();
+
+    const keywordFromUrl = (u: string): string => {
+      const s = u.trim().replace(/\s+/g, "");
+      const m = s.match(/^(?:https?:\/\/)?([^\/?#]+)/i);
+      const host = (m?.[1] || s).replace(/^www\./i, "");
+      return host || s;
+    };
+
+    const enqueueFallbackUrl = (u: string, keywordHint?: string) => {
+      const s = u.trim();
+      if (!s) return;
+      const k = s.toLowerCase();
+      if (fallbackSeen.has(k)) return;
+      fallbackSeen.add(k);
+      const kw = cleanKeyword(keywordHint || "") || keywordFromUrl(s);
+      fallbackQueue.push({ url: s, keyword: kw });
+    };
+
+    type AddressTask = { address: string; title: string; url?: string };
+    const addressQueue: AddressTask[] = [];
+    const addressSeen = new Set<string>();
+
+    const enqueueAddressTask = (t: AddressTask) => {
+      const addr = String(t.address || "").trim();
+      if (!addr) return;
+      const key = addr.toLowerCase();
+      if (addressSeen.has(key)) return;
+      addressSeen.add(key);
+      const title = cleanKeyword(String(t.title || "")) || addr;
+      addressQueue.push({ address: addr, title, url: t.url });
+    };
+
+    const wait = (ms: number) =>
+      new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+
+    const runGeocodeFallback = async () => {
+      // Kakao Geocoder/Places는 SDK 로드 이후에만 사용 가능하므로, 준비될 때까지 잠깐 대기합니다.
+      const startedAt = Date.now();
+      while (!controller.signal.aborted) {
+        const kakaoAny = window.kakao as unknown as any;
+        const services = kakaoAny?.maps?.services;
+        const GeocoderCtor = services?.Geocoder;
+        const PlacesCtor = services?.Places;
+        const StatusOk = services?.Status?.OK;
+        if (GeocoderCtor && StatusOk) {
+          const geocoder = new GeocoderCtor();
+          const places = PlacesCtor ? new PlacesCtor() : null;
+
+          const geocodeOne = (address: string) =>
+            new Promise<Omit<OpenApiMarkerPoint, "id"> | null>((resolve) => {
+              geocoder.addressSearch(
+                address,
+                (result: any[], status: string) => {
+                  if (
+                    status === StatusOk &&
+                    Array.isArray(result) &&
+                    result[0]
+                  ) {
+                    const lat = Number.parseFloat(result[0].y);
+                    const lng = Number.parseFloat(result[0].x);
+                    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+                      resolve({ lat, lng, title: address });
+                      return;
+                    }
+                  }
+                  resolve(null);
+                },
+              );
+            });
+
+          const keywordOne = (keyword: string) =>
+            new Promise<Omit<OpenApiMarkerPoint, "id"> | null>((resolve) => {
+              if (!places) return resolve(null);
+              places.keywordSearch(
+                keyword,
+                (data: any[], status: string) => {
+                  if (status === StatusOk && Array.isArray(data) && data[0]) {
+                    const lat = Number.parseFloat(data[0].y);
+                    const lng = Number.parseFloat(data[0].x);
+                    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+                      resolve({
+                        lat,
+                        lng,
+                        title: String(data[0].place_name || keyword),
+                        url:
+                          typeof data[0].place_url === "string"
+                            ? data[0].place_url
+                            : undefined,
+                      });
+                      return;
+                    }
+                  }
+                  resolve(null);
+                },
+                { size: 1 },
+              );
+            });
+
+          const worker = async () => {
+            while (!controller.signal.aborted) {
+              const task = addressQueue.shift();
+              if (!task) {
+                if (streamDone) break;
+                await wait(200);
+                continue;
+              }
+
+              const p =
+                (await geocodeOne(task.address)) ||
+                (await keywordOne(
+                  [task.title, task.address].filter(Boolean).join(" "),
+                )) ||
+                (await keywordOne(task.title));
+              if (p) {
+                // title/url은 task 기준으로 유지
+                enqueuePoints([
+                  {
+                    lat: p.lat,
+                    lng: p.lng,
+                    title: task.title || p.title,
+                    url: task.url,
+                  },
+                ]);
+              }
+              await wait(70);
+            }
+          };
+
+          const concurrency = 10;
+          await Promise.all(
+            Array.from({ length: concurrency }, () => worker()),
+          );
+          return;
+        }
+
+        if (streamDone && Date.now() - startedAt > 5000) return;
+        if (streamDone && addressQueue.length === 0) return;
+        await wait(150);
+      }
+    };
+
+    const runPlacesFallback = async () => {
+      // Kakao Places는 SDK 로드 이후에만 사용 가능하므로, 준비될 때까지 잠깐 대기합니다.
+      const startedAt = Date.now();
+      while (!controller.signal.aborted) {
+        const kakaoAny = window.kakao as unknown as any;
+        const services = kakaoAny?.maps?.services;
+        const PlacesCtor = services?.Places;
+        const StatusOk = services?.Status?.OK;
+        if (PlacesCtor && StatusOk) {
+          const places = new PlacesCtor();
+
+          const searchOne = (keyword: string) =>
+            new Promise<Omit<OpenApiMarkerPoint, "id"> | null>((resolve) => {
+              places.keywordSearch(
+                keyword,
+                (data: any[], status: string) => {
+                  if (status === StatusOk && Array.isArray(data) && data[0]) {
+                    const lat = Number.parseFloat(data[0].y);
+                    const lng = Number.parseFloat(data[0].x);
+                    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+                      resolve({
+                        lat,
+                        lng,
+                        title: String(data[0].place_name || keyword),
+                        url:
+                          typeof data[0].place_url === "string"
+                            ? data[0].place_url
+                            : undefined,
+                      });
+                      return;
+                    }
+                  }
+                  resolve(null);
+                },
+                { size: 1 },
+              );
+            });
+
+          const worker = async () => {
+            while (!controller.signal.aborted) {
+              const task = fallbackQueue.shift();
+              if (!task) {
+                if (streamDone) break;
+                await wait(200);
+                continue;
+              }
+              const p = await searchOne(task.keyword);
+              if (p) enqueuePoints([p]);
+              // 과도한 호출을 피하기 위해 약간 텀
+              await wait(60);
+            }
+          };
+
+          const concurrency = 20;
+          await Promise.all(
+            Array.from({ length: concurrency }, () => worker()),
+          );
+          return;
+        }
+
+        if (streamDone && Date.now() - startedAt > 5000) return;
+        if (streamDone && fallbackQueue.length === 0) return;
+        await wait(150);
+      }
+    };
+
+    const geocodePromise = runGeocodeFallback();
+    const fallbackPromise = runPlacesFallback();
+
+    try {
+      const res = await fetch("/api/openapi-fetch?stream=1", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "text/event-stream",
+        },
+        body: JSON.stringify({
+          urls,
+          // 요청 URL이 많을수록 "동시에" 처리되도록 최대치로 병렬 처리합니다.
+          concurrency: Math.min(200, Math.max(1, urls.length)),
+        }),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        throw new Error(payload?.error || `HTTP ${res.status}`);
+      }
+      if (!res.body) {
+        throw new Error("No response body");
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      const handleFetchResult = (result: unknown) => {
+        if (!result || typeof result !== "object") return;
+        const rr = result as AnyRecord;
+        const urlRaw = typeof rr.url === "string" ? rr.url : "";
+        const titleRaw = typeof rr.title === "string" ? rr.title : "";
+
+        if (rr.ok !== true) {
+          if (urlRaw) enqueueFallbackUrl(urlRaw, titleRaw);
+          return;
+        }
+
+        const extracted = extractOpenApiMarkers(rr.json);
+        if (extracted.length > 0) enqueuePoints(extracted);
+
+        // 좌표가 없는 row는 주소를 지오코딩해서 마커로 표시합니다.
+        const geocodeTasks = extractOpenApiGeocodeTasks(rr.json);
+        if (geocodeTasks.length > 0) {
+          geocodeTasks.forEach((t) => enqueueAddressTask(t));
+        }
+
+        // 좌표/주소 모두 찾지 못한 경우에만 마지막 수단으로 Places(키워드) fallback을 사용합니다.
+        if (extracted.length === 0 && geocodeTasks.length === 0 && urlRaw) {
+          enqueueFallbackUrl(urlRaw, titleRaw);
+        }
+      };
+
+      while (!controller.signal.aborted) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let idx: number;
+        while ((idx = buffer.indexOf("\n\n")) !== -1) {
+          const rawEvent = buffer.slice(0, idx);
+          buffer = buffer.slice(idx + 2);
+
+          const lines = rawEvent.split(/\r?\n/);
+          let eventType = "message";
+          const dataLines: string[] = [];
+          for (const line of lines) {
+            if (line.startsWith("event:")) {
+              eventType = line.slice(6).trim();
+            } else if (line.startsWith("data:")) {
+              dataLines.push(line.slice(5).trimStart());
+            }
+          }
+
+          if (eventType === "done") {
+            streamDone = true;
+            continue;
+          }
+          if (eventType === "result") {
+            const dataStr = dataLines.join("\n");
+            if (!dataStr) continue;
+            try {
+              handleFetchResult(JSON.parse(dataStr));
+            } catch {
+              // ignore bad event payload
+            }
+            continue;
+          }
+          if (eventType === "error") {
+            const dataStr = dataLines.join("\n");
+            if (!dataStr) continue;
+            try {
+              const payload = JSON.parse(dataStr) as { error?: string };
+              if (payload?.error) setOpenApiMarkersError(payload.error);
+            } catch {
+              // ignore
+            }
+          }
+        }
+      }
+    } catch (e) {
+      if (!controller.signal.aborted) {
+        setOpenApiMarkersError(e instanceof Error ? e.message : String(e));
+      }
+    } finally {
+      streamDone = true;
+      await geocodePromise.catch(() => null);
+      await fallbackPromise.catch(() => null);
+      if (flushTimer != null) {
+        window.clearTimeout(flushTimer);
+        flushTimer = null;
+      }
+      flushPending();
+
+      // 최신 실행만 상태를 닫습니다(중간에 다시 실행한 경우 old run 무시)
+      if (runId === openApiRunIdRef.current) {
+        setIsLoadingOpenApiMarkers(false);
+        if (addedCount === 0 && !controller.signal.aborted) {
+          setOpenApiMarkersError(
+            (prev) =>
+              prev ||
+              "좌표를 찾지 못했습니다. (JSON 좌표/주소 지오코딩/Places 검색 실패)",
+          );
+        }
+      }
+    }
+  };
+
+  const clearOpenApiMarkers = () => {
+    try {
+      openApiAbortRef.current?.abort();
+    } catch {
+      // ignore
+    }
+    openApiAbortRef.current = null;
+    setIsLoadingOpenApiMarkers(false);
+    setOpenApiMarkers([]);
+    setOpenApiMarkersError(null);
+    setIsOpenApiMode(false);
+
+    try {
+      if (openApiFitTimerRef.current != null) {
+        window.clearTimeout(openApiFitTimerRef.current);
+        openApiFitTimerRef.current = null;
+      }
+    } catch {
+      // ignore
+    }
+    try {
+      openApiMapMarkersRef.current.forEach((m) => m.setMap(null));
+    } catch {
+      // ignore
+    }
+    openApiMapMarkersRef.current = [];
+    openApiRenderedCountRef.current = 0;
+    openApiBoundsRef.current = null;
+    try {
+      clustererRef.current?.clear();
+    } catch {
+      // ignore
+    }
+    try {
+      infoWindowRef.current?.close();
+    } catch {
+      // ignore
+    }
+  };
 
   const toggleSpecialty = (specialty: string) => {
     setSelectedSpecialties((prev) =>
@@ -1609,7 +2480,7 @@ export default function CounselingPage() {
         if (cancelled) return;
 
         geocodedIdsRef.current.clear();
-        setPublicCenters(normalized);
+        setPublicCenters(applyGeoCacheToCenters(normalized));
         setHasLoadedPublicCenters(true);
       } catch (e) {
         if (cancelled) return;
@@ -1708,7 +2579,7 @@ export default function CounselingPage() {
         if (cancelled) return;
 
         geocodedIdsRef.current.clear();
-        setPublicChildCenters(normalized);
+        setPublicChildCenters(applyGeoCacheToCenters(normalized));
         setHasLoadedChildCenters(true);
       } catch (e) {
         if (cancelled) return;
@@ -1729,19 +2600,26 @@ export default function CounselingPage() {
     };
   }, [activeTab, jsonFiles, hasLoadedChildCenters]);
 
-  // 좌표 없는 데이터는 주소로 지오코딩(카카오 services 필요)
+  // 좌표 없는 데이터는 주소/키워드로 자동 보완(카카오 services 필요)
+  // - 주소 지오코딩(Geocoder) → 실패 시 키워드 검색(Places)
+  // - 병렬 처리 + 배치 업데이트로 로딩 속도를 개선합니다.
   useEffect(() => {
     if (!mapLoaded) return;
+    if (!geoCacheReady) return;
+    if (isOpenApiMode) return;
     if (isGeocodingRef.current) return;
 
-    const kakao = window.kakao;
-    if (!kakao?.maps) return;
-
-    const services = kakao.maps.services;
+    const kakaoAny = window.kakao as unknown as any;
+    const services = kakaoAny?.maps?.services;
     if (!services?.Geocoder) return;
 
-    const visibleIds = new Set(visibleCenters.map((c) => c.id));
+    const StatusOk: string | undefined = services?.Status?.OK;
+    if (!StatusOk) return;
 
+    const PlacesCtor = services?.Places as (new () => any) | undefined;
+
+    // 현재 화면에 보이는(필터/검색 적용) 항목만 대상으로 처리합니다.
+    const visibleIds = new Set(visibleCenters.map((c) => c.id));
     const source =
       activeTab === "counseling" ? ("public" as const) : ("child" as const);
     const activeCenters =
@@ -1753,7 +2631,6 @@ export default function CounselingPage() {
           (c) =>
             visibleIds.has(c.id) &&
             (c.lat == null || c.lng == null) &&
-            Boolean(c.address) &&
             !geocodedIdsRef.current.has(c.id),
         )
         .map((center) => ({ source, center }));
@@ -1762,14 +2639,18 @@ export default function CounselingPage() {
 
     let cancelled = false;
     isGeocodingRef.current = true;
-    const geocoder = new services.Geocoder();
 
-    const geocode = (address: string) =>
+    const wait = (ms: number) =>
+      new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+
+    const geocodeOnce = (geocoder: any, address: string) =>
       new Promise<{ lat: number; lng: number } | null>((resolve) => {
+        const a = String(address || "").trim();
+        if (!a) return resolve(null);
         geocoder.addressSearch(
-          address,
+          a,
           (result: KakaoGeocoderResult[], status: KakaoGeocoderStatus) => {
-            if (status === services.Status.OK && result && result[0]) {
+            if (status === StatusOk && result && result[0]) {
               const lat = Number.parseFloat(result[0].y);
               const lng = Number.parseFloat(result[0].x);
               if (Number.isFinite(lat) && Number.isFinite(lng)) {
@@ -1782,70 +2663,161 @@ export default function CounselingPage() {
         );
       });
 
-    (async () => {
-      setGeocodingProgress({ current: 0, total: tasks.length });
+    const geocode = async (geocoder: any, address: string) => {
+      const first = await geocodeOnce(geocoder, address);
+      if (first) return first;
+      await wait(140);
+      return await geocodeOnce(geocoder, address);
+    };
 
-      const updatesPublic = new Map<string, { lat: number; lng: number }>();
-      const updatesChild = new Map<string, { lat: number; lng: number }>();
-      let current = 0;
-      const flushEvery = 10;
+    const keywordOnce = (places: any, keyword: string) =>
+      new Promise<{ lat: number; lng: number } | null>((resolve) => {
+        if (!places) return resolve(null);
+        const kw = String(keyword || "").trim();
+        if (!kw) return resolve(null);
+        places.keywordSearch(
+          kw,
+          (data: any[], status: string) => {
+            if (status === StatusOk && Array.isArray(data) && data[0]) {
+              const lat = Number.parseFloat(data[0].y);
+              const lng = Number.parseFloat(data[0].x);
+              if (Number.isFinite(lat) && Number.isFinite(lng)) {
+                resolve({ lat, lng });
+                return;
+              }
+            }
+            resolve(null);
+          },
+          { size: 1 },
+        );
+      });
 
-      const flush = () => {
-        if (cancelled) return;
+    const keywordSearch = async (places: any, keyword: string) => {
+      const first = await keywordOnce(places, keyword);
+      if (first) return first;
+      await wait(140);
+      return await keywordOnce(places, keyword);
+    };
 
-        if (updatesPublic.size > 0) {
-          const batch = new Map(updatesPublic);
-          updatesPublic.clear();
-          setPublicCenters((prev) =>
-            prev.map((c) => {
-              const u = batch.get(c.id);
-              return u ? { ...c, lat: u.lat, lng: u.lng } : c;
-            }),
-          );
-        }
+    const updatesPublic = new Map<string, { lat: number; lng: number }>();
+    const updatesChild = new Map<string, { lat: number; lng: number }>();
+    let done = 0;
 
-        if (updatesChild.size > 0) {
-          const batch = new Map(updatesChild);
-          updatesChild.clear();
-          setPublicChildCenters((prev) =>
-            prev.map((c) => {
-              const u = batch.get(c.id);
-              return u ? { ...c, lat: u.lat, lng: u.lng } : c;
-            }),
-          );
-        }
-      };
+    let flushTimer: number | null = null;
+    const doFlush = () => {
+      if (cancelled) return;
 
-      for (const { source, center } of tasks) {
+      const total = tasks.length;
+      setGeocodingProgress({ current: done, total });
+
+      if (updatesPublic.size > 0) {
+        const batch = new Map(updatesPublic);
+        updatesPublic.clear();
+        setPublicCenters((prev) =>
+          prev.map((c) => {
+            const u = batch.get(c.id);
+            return u ? { ...c, lat: u.lat, lng: u.lng } : c;
+          }),
+        );
+      }
+
+      if (updatesChild.size > 0) {
+        const batch = new Map(updatesChild);
+        updatesChild.clear();
+        setPublicChildCenters((prev) =>
+          prev.map((c) => {
+            const u = batch.get(c.id);
+            return u ? { ...c, lat: u.lat, lng: u.lng } : c;
+          }),
+        );
+      }
+    };
+
+    const scheduleFlush = () => {
+      if (flushTimer != null) return;
+      flushTimer = window.setTimeout(() => {
+        flushTimer = null;
+        doFlush();
+      }, 120);
+    };
+
+    let nextIndex = 0;
+    const worker = async () => {
+      const geocoder = new services.Geocoder();
+      const places = PlacesCtor ? new PlacesCtor() : null;
+
+      while (!cancelled) {
+        const i = nextIndex;
+        nextIndex += 1;
+        if (i >= tasks.length) break;
+
+        const { source, center } = tasks[i];
         if (cancelled) break;
+
+        // worker 간 중복 방지
+        if (geocodedIdsRef.current.has(center.id)) {
+          done += 1;
+          scheduleFlush();
+          continue;
+        }
         geocodedIdsRef.current.add(center.id);
 
-        const coords = await geocode(center.address);
-        current += 1;
+        const cached = center.address
+          ? geoCacheRef.current[geoCacheKeyFor(center.name, center.address)]
+          : undefined;
 
-        if (!cancelled) setGeocodingProgress({ current, total: tasks.length });
+        let coords =
+          cached ??
+          (center.address ? await geocode(geocoder, center.address) : null);
+        if (!coords) {
+          const keyword = [center.name, center.address]
+            .filter(Boolean)
+            .join(" ");
+          coords = await keywordSearch(places, keyword);
+          if (!coords && center.name)
+            coords = await keywordSearch(places, center.name);
+        }
+
         if (coords) {
           if (source === "public") updatesPublic.set(center.id, coords);
           else updatesChild.set(center.id, coords);
+          storeGeoCache(center, coords);
         }
 
-        if (current % flushEvery === 0) flush();
-        // 너무 빠르게 호출하지 않도록 약간 텀을 둠
-        await new Promise((r) => setTimeout(r, 60));
+        done += 1;
+        scheduleFlush();
+        // 과도한 호출로 실패가 누적되는 것을 막기 위해 적당한 pacing 적용
+        await wait(90);
       }
+    };
 
-      if (cancelled) return;
-
-      flush();
-    })().finally(() => {
-      isGeocodingRef.current = false;
-      if (!cancelled) setGeocodingProgress(null);
-    });
+    (async () => {
+      setGeocodingProgress({ current: 0, total: tasks.length });
+      // 너무 높은 동시성은 Kakao 서비스 제한으로 실패가 늘어날 수 있어 보수적으로 설정합니다.
+      const concurrency = Math.min(
+        6,
+        Math.max(2, Math.ceil(tasks.length / 400)),
+      );
+      await Promise.all(Array.from({ length: concurrency }, () => worker()));
+    })()
+      .catch(() => null)
+      .finally(() => {
+        isGeocodingRef.current = false;
+        if (cancelled) return;
+        try {
+          if (flushTimer != null) window.clearTimeout(flushTimer);
+        } catch {
+          // ignore
+        }
+        flushTimer = null;
+        doFlush();
+        setGeocodingProgress(null);
+      });
 
     return () => {
       cancelled = true;
     };
-  }, [activeTab, mapLoaded, visibleCentersKey]);
+  }, [activeTab, mapLoaded, geoCacheReady, visibleCentersKey, isOpenApiMode]);
 
   useEffect(() => {
     async function loadKakaoMap() {
@@ -1960,15 +2932,132 @@ export default function CounselingPage() {
       ? new kakao.maps.MarkerClusterer({
           map,
           averageCenter: true,
-          minLevel: 8,
+          // minLevel이 너무 크면(예: 8) 일반적인 줌(level=5)에서 클러스터러가
+          // 마커를 관리하지 않아 "마커가 안 보이는" 현상이 생길 수 있습니다.
+          // 모든 줌 레벨에서 마커가 보이도록 낮게 설정합니다.
+          minLevel: 1,
         })
       : null;
   }, [mapLoaded]);
 
+  // OpenAPI 마커(URI 기반): 결과가 추가되는 만큼 점진적으로 지도에 마커를 추가합니다.
+  useEffect(() => {
+    const kakao = window.kakao as unknown as any;
+    const map = mapInstanceRef.current;
+    if (!isOpenApiMode) return;
+    if (!mapLoaded || !map || !kakao?.maps) return;
+
+    // openApiMarkers가 reset(0으로 초기화)된 경우 기존 OpenAPI 마커도 정리
+    if (openApiMarkers.length < openApiRenderedCountRef.current) {
+      try {
+        openApiMapMarkersRef.current.forEach((m) => m.setMap(null));
+      } catch {
+        // ignore
+      }
+      openApiMapMarkersRef.current = [];
+      openApiRenderedCountRef.current = 0;
+      openApiBoundsRef.current = null;
+    }
+
+    if (!openApiBoundsRef.current) {
+      openApiBoundsRef.current = new kakao.maps.LatLngBounds();
+    }
+    const bounds = openApiBoundsRef.current!;
+
+    const clusterer = clustererRef.current;
+    const startIndex = openApiRenderedCountRef.current;
+    const newMarkers: KakaoMarker[] = [];
+    for (let i = startIndex; i < openApiMarkers.length; i++) {
+      const p = openApiMarkers[i];
+      const markerPosition = new kakao.maps.LatLng(p.lat, p.lng);
+      const marker = new kakao.maps.Marker(
+        clusterer
+          ? { position: markerPosition, title: p.title }
+          : { position: markerPosition, map, title: p.title },
+      );
+
+      openApiMapMarkersRef.current.push(marker);
+      if (clusterer) newMarkers.push(marker);
+      bounds.extend(markerPosition);
+
+      kakao.maps.event.addListener(marker, "click", () => {
+        if (infoWindowRef.current) {
+          const content = document.createElement("div");
+          content.style.padding = "6px";
+          content.style.fontSize = "12px";
+          content.textContent = p.title;
+          infoWindowRef.current.setContent(content);
+          infoWindowRef.current.open(map, marker);
+        }
+      });
+    }
+    if (clusterer && newMarkers.length > 0) {
+      try {
+        clusterer.addMarkers(newMarkers);
+      } catch {
+        // ignore
+      }
+    }
+    openApiRenderedCountRef.current = openApiMarkers.length;
+    if (clusterer && openApiMarkers.length > startIndex) {
+      try {
+        clusterer.redraw();
+      } catch {
+        // ignore
+      }
+    }
+
+    if (openApiMarkers.length > 0) {
+      try {
+        if (openApiFitTimerRef.current != null) {
+          window.clearTimeout(openApiFitTimerRef.current);
+        }
+      } catch {
+        // ignore
+      }
+      openApiFitTimerRef.current = window.setTimeout(() => {
+        const kakao2 = window.kakao as unknown as any;
+        const map2 = mapInstanceRef.current;
+        if (!map2 || !kakao2?.maps) return;
+        const b = openApiBoundsRef.current;
+        if (b) map2.setBounds(b);
+        try {
+          clustererRef.current?.redraw();
+        } catch {
+          // ignore
+        }
+      }, 400);
+    }
+  }, [isOpenApiMode, mapLoaded, openApiMarkers]);
+
+  // OpenAPI 모드 해제 시, OpenAPI 마커를 정리합니다(로컬 마커는 별도 effect에서 다시 그림).
+  useEffect(() => {
+    if (isOpenApiMode) return;
+    try {
+      if (openApiFitTimerRef.current != null) {
+        window.clearTimeout(openApiFitTimerRef.current);
+        openApiFitTimerRef.current = null;
+      }
+    } catch {
+      // ignore
+    }
+    try {
+      openApiMapMarkersRef.current.forEach((m) => m.setMap(null));
+    } catch {
+      // ignore
+    }
+    openApiMapMarkersRef.current = [];
+    openApiRenderedCountRef.current = 0;
+    openApiBoundsRef.current = null;
+  }, [isOpenApiMode]);
+
+  // 로컬 마커: 목록(멤버십)이 바뀔 때만 전체 재구성합니다.
+  // (좌표 지오코딩으로 lat/lng가 채워질 때마다 전체 clear/rebuild 하면 느려져서, 아래 effect에서 "증분 추가"로 처리)
   useEffect(() => {
     const kakao = window.kakao;
     const map = mapInstanceRef.current;
     if (!mapLoaded || !map || !kakao?.maps) return;
+    if (isOpenApiMode) return;
 
     try {
       map.relayout?.();
@@ -1983,34 +3072,36 @@ export default function CounselingPage() {
       // ignore
     }
 
-    markersRef.current.forEach((marker) => marker.setMap(null));
+    try {
+      markersRef.current.forEach((m) => m.setMap(null));
+    } catch {
+      // ignore
+    }
     markersRef.current = [];
-    if (infoWindowRef.current) {
-      infoWindowRef.current.close();
+    markerByCenterIdRef.current.clear();
+    renderedMarkerIdsRef.current.clear();
+    try {
+      infoWindowRef.current?.close();
+    } catch {
+      // ignore
     }
 
     const bounds = new kakao.maps.LatLngBounds();
     let hasAnyMarker = false;
     const nextMarkers: KakaoMarker[] = [];
 
-    visibleCenters.forEach((center) => {
-      if (center.lat == null || center.lng == null) return;
-
+    for (const center of visibleCenters) {
+      if (center.lat == null || center.lng == null) continue;
       const markerPosition = new kakao.maps.LatLng(center.lat, center.lng);
       const marker = new kakao.maps.Marker(
         clusterer
-          ? {
-              position: markerPosition,
-              title: center.name,
-            }
-          : {
-              position: markerPosition,
-              map,
-              title: center.name,
-            },
+          ? { position: markerPosition, title: center.name }
+          : { position: markerPosition, map, title: center.name },
       );
 
       nextMarkers.push(marker);
+      markerByCenterIdRef.current.set(center.id, marker);
+      renderedMarkerIdsRef.current.add(center.id);
       bounds.extend(markerPosition);
       hasAnyMarker = true;
 
@@ -2025,12 +3116,12 @@ export default function CounselingPage() {
           infoWindowRef.current.open(map, marker);
         }
       });
-    });
+    }
 
     markersRef.current = nextMarkers;
     if (clusterer && nextMarkers.length > 0) {
-      clusterer.addMarkers(nextMarkers);
       try {
+        clusterer.addMarkers(nextMarkers);
         clusterer.redraw();
       } catch {
         // ignore
@@ -2040,7 +3131,56 @@ export default function CounselingPage() {
     if (hasAnyMarker) {
       map.setBounds(bounds);
     }
-  }, [mapLoaded, visibleCenters]);
+  }, [mapLoaded, visibleCentersKey, isOpenApiMode]);
+
+  // 로컬 마커: 좌표가 채워지면(지오코딩) 새 마커만 "증분 추가"합니다.
+  useEffect(() => {
+    const kakao = window.kakao;
+    const map = mapInstanceRef.current;
+    if (!mapLoaded || !map || !kakao?.maps) return;
+    if (isOpenApiMode) return;
+
+    const clusterer = clustererRef.current;
+    const newMarkers: KakaoMarker[] = [];
+
+    for (const center of visibleCenters) {
+      if (center.lat == null || center.lng == null) continue;
+      if (renderedMarkerIdsRef.current.has(center.id)) continue;
+
+      const markerPosition = new kakao.maps.LatLng(center.lat, center.lng);
+      const marker = new kakao.maps.Marker(
+        clusterer
+          ? { position: markerPosition, title: center.name }
+          : { position: markerPosition, map, title: center.name },
+      );
+
+      markersRef.current.push(marker);
+      markerByCenterIdRef.current.set(center.id, marker);
+      renderedMarkerIdsRef.current.add(center.id);
+      if (clusterer) newMarkers.push(marker);
+
+      kakao.maps.event.addListener(marker, "click", () => {
+        setSelectedCenter(center);
+        if (infoWindowRef.current) {
+          const content = document.createElement("div");
+          content.style.padding = "6px";
+          content.style.fontSize = "12px";
+          content.textContent = center.name;
+          infoWindowRef.current.setContent(content);
+          infoWindowRef.current.open(map, marker);
+        }
+      });
+    }
+
+    if (clusterer && newMarkers.length > 0) {
+      try {
+        clusterer.addMarkers(newMarkers);
+        clusterer.redraw();
+      } catch {
+        // ignore
+      }
+    }
+  }, [mapLoaded, visibleCenters, isOpenApiMode]);
 
   // 지도/리스트 뷰 전환 시, 지도가 다시 보이면 relayout + bounds 재적용
   useEffect(() => {
@@ -2056,14 +3196,19 @@ export default function CounselingPage() {
         // ignore
       }
 
-      const bounds = new kakao.maps.LatLngBounds();
-      let hasAnyMarker = false;
-      for (const center of visibleCenters) {
-        if (center.lat == null || center.lng == null) continue;
-        bounds.extend(new kakao.maps.LatLng(center.lat, center.lng));
-        hasAnyMarker = true;
+      if (isOpenApiMode) {
+        const b = openApiBoundsRef.current;
+        if (b) map.setBounds(b);
+      } else {
+        const bounds = new kakao.maps.LatLngBounds();
+        let hasAnyMarker = false;
+        for (const center of visibleCenters) {
+          if (center.lat == null || center.lng == null) continue;
+          bounds.extend(new kakao.maps.LatLng(center.lat, center.lng));
+          hasAnyMarker = true;
+        }
+        if (hasAnyMarker) map.setBounds(bounds);
       }
-      if (hasAnyMarker) map.setBounds(bounds);
       try {
         clustererRef.current?.redraw();
       } catch {
@@ -2072,7 +3217,7 @@ export default function CounselingPage() {
     }, 0);
 
     return () => window.clearTimeout(t);
-  }, [viewMode, mapLoaded, visibleCenters]);
+  }, [viewMode, mapLoaded, visibleCentersKey, isOpenApiMode]);
 
   useEffect(() => {
     setSelectedCenter(null);
@@ -2174,6 +3319,48 @@ export default function CounselingPage() {
                       >
                         필터 초기화
                       </Button>
+
+                      <div className="pt-6 border-t">
+                        <h4 className="font-medium mb-2">OpenAPI URI 마커</h4>
+                        <p className="text-xs text-muted-foreground mb-2">
+                          JSON을 반환하는 OpenAPI URI를 한 줄에 하나씩 입력하면,
+                          응답에 포함된 좌표(lat/lng 또는 x/y)를 지도 마커로
+                          표시합니다.
+                        </p>
+                        <Textarea
+                          value={openApiUrlsText}
+                          onChange={(e) => setOpenApiUrlsText(e.target.value)}
+                          placeholder={`예) https://example.com/api/points\n(여러 개 입력 가능: 줄바꿈/쉼표)`}
+                          className="min-h-24"
+                        />
+                        {openApiMarkersError ? (
+                          <p className="mt-2 text-xs text-red-500">
+                            {openApiMarkersError}
+                          </p>
+                        ) : null}
+                        <div className="mt-3 flex gap-2">
+                          <Button
+                            type="button"
+                            onClick={loadMarkersFromOpenApi}
+                            disabled={isLoadingOpenApiMarkers}
+                          >
+                            {isLoadingOpenApiMarkers
+                              ? "불러오는 중..."
+                              : "URI로 마커 표시"}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="bg-transparent"
+                            onClick={clearOpenApiMarkers}
+                            disabled={
+                              !isOpenApiMode && openApiMarkers.length === 0
+                            }
+                          >
+                            마커 해제
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                   </SheetContent>
                 </Sheet>
@@ -2236,7 +3423,7 @@ export default function CounselingPage() {
                 id={viewMode === "map" ? "map-view" : undefined}
                 className="text-base font-semibold scroll-mt-24"
               >
-                {viewMode === "map" ? "지도 뷰" : "상담소 정보 카드"}
+                {viewMode === "map" ? "지도 뷰" : `${centerLabel} 정보 카드`}
               </h3>
               <p className="text-sm text-muted-foreground mt-1">
                 {activeTab === "counseling"
@@ -2279,13 +3466,8 @@ export default function CounselingPage() {
                       id="cards"
                       className="text-base font-semibold scroll-mt-24"
                     >
-                      상담소 정보 카드
+                      {centerLabel} 정보 카드
                     </h3>
-                    {isLoadingActive ? (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        JSON 데이터 불러오는 중...
-                      </p>
-                    ) : null}
                     {activeError && (
                       <p className="text-xs text-red-500 mt-2">
                         JSON 데이터를 불러오지 못했습니다. (샘플 데이터로
@@ -2319,13 +3501,8 @@ export default function CounselingPage() {
                       id="cards"
                       className="text-base font-semibold scroll-mt-24"
                     >
-                      상담소 정보 카드
+                      {centerLabel} 정보 카드
                     </h3>
-                    {isLoadingActive ? (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        JSON 데이터 불러오는 중...
-                      </p>
-                    ) : null}
                     {activeError && (
                       <p className="text-xs text-red-500 mt-2">
                         JSON 데이터를 불러오지 못했습니다. (샘플 데이터로
