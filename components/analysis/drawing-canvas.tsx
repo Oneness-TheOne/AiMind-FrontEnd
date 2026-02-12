@@ -26,7 +26,7 @@ export function DrawingCanvas({ onSave, onCancel, width = 500, height = 400, tit
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [isDrawing, setIsDrawing] = useState(false)
   const [tool, setTool] = useState<"pencil" | "eraser">("pencil")
-  const [brushSize, setBrushSize] = useState(4)
+  const [brushSize, setBrushSize] = useState(2)
   const [history, setHistory] = useState<ImageData[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
   const lastPosRef = useRef({ x: 0, y: 0 })
@@ -200,86 +200,85 @@ export function DrawingCanvas({ onSave, onCancel, width = 500, height = 400, tit
   }
 
   return (
-    <div className="space-y-4">
-      {title && (
-        <div className="text-center">
-          <h3 className="text-lg font-semibold text-foreground">{title}</h3>
-        </div>
-      )}
-      
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-2 p-3 bg-secondary/50 rounded-lg">
-        {/* Tools */}
-        <div className="flex items-center gap-1 border-r border-border pr-2 mr-2">
-          <Button
-            variant={tool === "pencil" ? "default" : "ghost"}
-            size="icon"
-            onClick={() => setTool("pencil")}
-            title="연필"
-          >
-            <Pencil className="h-4 w-4" />
-          </Button>
-          <Button
-            variant={tool === "eraser" ? "default" : "ghost"}
-            size="icon"
-            onClick={() => setTool("eraser")}
-            title="지우개"
-          >
-            <Eraser className="h-4 w-4" />
-          </Button>
-        </div>
+    <div className="flex gap-6">
+      {/* Left Panel - Controls */}
+      <div className="flex flex-col gap-2 w-40">
+        {title && (
+          <div className="mb-2">
+            <h3 className="text-lg font-semibold text-foreground">{title}</h3>
+          </div>
+        )}
 
-        {/* Brush Size */}
-        <div className="flex items-center gap-2 border-r border-border pr-2 mr-2">
-          <span className="text-sm text-muted-foreground">크기:</span>
-          <Slider
-            value={[brushSize]}
-            onValueChange={([value]) => setBrushSize(value)}
-            min={1}
-            max={20}
-            step={1}
-            className="w-24"
-          />
-          <span className="text-sm text-muted-foreground min-w-[2rem]">{brushSize}px</span>
-        </div>
+        <Button
+          variant={tool === "pencil" ? "default" : "outline"}
+          onClick={() => setTool("pencil")}
+          className="w-full justify-start"
+        >
+          <Pencil className="h-4 w-4 mr-2" />
+          연필
+        </Button>
 
-        <div className="border-l border-border pl-2 ml-2 flex items-center gap-1">
-          {/* Undo/Redo */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={undo}
-            disabled={historyIndex <= 0}
-            title="되돌리기"
-          >
-            <Undo2 className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={redo}
-            disabled={historyIndex >= history.length - 1}
-            title="다시 실행"
-          >
-            <Redo2 className="h-4 w-4" />
-          </Button>
-        </div>
+        <Button
+          variant={tool === "eraser" ? "default" : "outline"}
+          onClick={() => setTool("eraser")}
+          className="w-full justify-start"
+        >
+          <Eraser className="h-4 w-4 mr-2" />
+          지우개
+        </Button>
 
-        <div className="border-l border-border pl-2 ml-2 flex items-center gap-1">
-          {/* Clear */}
-          <Button variant="ghost" size="icon" onClick={clearCanvas} title="전체 지우기">
-            <Trash2 className="h-4 w-4" />
+        <Button
+          variant="outline"
+          onClick={undo}
+          disabled={historyIndex <= 0}
+          className="w-full justify-start"
+        >
+          <Undo2 className="h-4 w-4 mr-2" />
+          되돌리기
+        </Button>
+
+        <Button
+          variant="outline"
+          onClick={redo}
+          disabled={historyIndex >= history.length - 1}
+          className="w-full justify-start"
+        >
+          <Redo2 className="h-4 w-4 mr-2" />
+          다시실행
+        </Button>
+
+        <Button
+          variant="outline"
+          onClick={clearCanvas}
+          className="w-full justify-start mb-auto"
+        >
+          <Trash2 className="h-4 w-4 mr-2" />
+          전체지우기
+        </Button>
+
+        {onCancel && (
+          <Button
+            variant="outline"
+            onClick={onCancel}
+            className="w-full"
+          >
+            취소
           </Button>
-        </div>
+        )}
+
+        <Button onClick={handleSave} className="w-full">
+          저장하기
+        </Button>
       </div>
 
-      {/* Canvas */}
+      {/* Right Panel - Canvas */}
       <div className="border rounded-xl overflow-hidden bg-white">
         <canvas
           ref={canvasRef}
           width={width}
           height={height}
-          className="w-full touch-none cursor-crosshair"
+          className="touch-none"
+          style={{ cursor: 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'28\' height=\'28\' viewBox=\'0 0 28 28\'><path d=\'M0 28 L6 22 L9 25 L3 28 Z\' fill=\'%23000\'/><path d=\'M6 22 L22 6 L25 9 L9 25 Z\' fill=\'%23333\'/><path d=\'M22 6 L24 4 L26 6 L25 9 Z\' fill=\'%23666\'/></svg>") 0 28, auto' }}
           onMouseDown={startDrawing}
           onMouseMove={draw}
           onMouseUp={stopDrawing}
@@ -288,18 +287,6 @@ export function DrawingCanvas({ onSave, onCancel, width = 500, height = 400, tit
           onTouchMove={draw}
           onTouchEnd={stopDrawing}
         />
-      </div>
-
-      {/* Save/Cancel Buttons */}
-      <div className="flex gap-2">
-        {onCancel && (
-          <Button variant="outline" onClick={onCancel} className="flex-1">
-            취소
-          </Button>
-        )}
-        <Button onClick={handleSave} className="flex-1">
-          저장하기
-        </Button>
       </div>
     </div>
   )

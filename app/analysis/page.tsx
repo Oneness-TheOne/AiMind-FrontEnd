@@ -625,8 +625,8 @@ export default function AnalysisPage() {
 
       {/* Drawing Dialog */}
       <Dialog open={drawingSlotIndex !== null} onOpenChange={(open) => !open && setDrawingSlotIndex(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="min-w-[750px] max-w-none max-h-[90vh] p-6">
+          <DialogHeader className="sr-only">
             <DialogTitle>
               {drawingSlotIndex !== null && slotConfigs[drawingSlotIndex]
                 ? `${slotConfigs[drawingSlotIndex].label} 그리기`
@@ -637,8 +637,8 @@ export default function AnalysisPage() {
             <DrawingCanvas
               onSave={handleSaveDrawing}
               onCancel={() => setDrawingSlotIndex(null)}
-              width={800}
-              height={600}
+              width={500}
+              height={500}
               title={slotConfigs[drawingSlotIndex]?.label}
             />
           )}
