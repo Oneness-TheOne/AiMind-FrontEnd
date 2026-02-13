@@ -33,6 +33,8 @@ export default function AnalyzingPage() {
   const [currentStep, setCurrentStep] = useState(0)
   const [currentTip, setCurrentTip] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const [completedDurationMs, setCompletedDurationMs] = useState<number | null>(null)
 
   const dataUrlToFile = (dataUrl: string, filename: string) => {
     const [header, data] = dataUrl.split(",")
@@ -49,23 +51,10 @@ export default function AnalyzingPage() {
   useEffect(() => {
     const tipInterval = setInterval(() => {
       setCurrentTip((prev) => (prev + 1) % tips.length)
-    }, 3000)
+    }, 7000)
 
     return () => clearInterval(tipInterval)
   }, [])
-
-  useEffect(() => {
-    const progressInterval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 95) {
-          return prev
-        }
-        return prev + 1
-      })
-    }, 60)
-
-    return () => clearInterval(progressInterval)
-  }, [router])
 
   useEffect(() => {
     const globalStore = globalThis as typeof globalThis & {
@@ -106,6 +95,21 @@ export default function AnalyzingPage() {
     formData.append("child_age", childInfo.age || "")
     formData.append("child_gender", childInfo.gender || "")
 
+    const analysisStartedAt = Date.now()
+    setElapsedSeconds(0)
+    setCompletedDurationMs(null)
+    setProgress(0)
+
+    const expectedDurationMs = 30_000
+    const progressInterval = setInterval(() => {
+      const elapsed = Date.now() - analysisStartedAt
+      const p = Math.min(95, (elapsed / expectedDurationMs) * 95)
+      setProgress(p)
+    }, 80)
+    const elapsedInterval = setInterval(() => {
+      setElapsedSeconds((s) => Math.floor((Date.now() - analysisStartedAt) / 1000))
+    }, 1000)
+
     fetch(`${aimodelsBaseUrl}/analyze`, {
       method: "POST",
       body: formData,
@@ -142,6 +146,15 @@ export default function AnalyzingPage() {
           })
         }
         sessionStorage.setItem("analysisResponse", JSON.stringify(storageData))
+        const analysisDurationMs = Date.now() - analysisStartedAt
+        clearInterval(progressInterval)
+        clearInterval(elapsedInterval)
+        setCompletedDurationMs(analysisDurationMs)
+        try {
+          const g = globalThis as typeof globalThis & { __analysisDurationMs?: number }
+          g.__analysisDurationMs = analysisDurationMs
+          sessionStorage.setItem("analysisDurationMs", String(analysisDurationMs))
+        } catch (_) {}
         setProgress(100)
 
         // MongoDB + S3 저장: 로그인 유저면 BackEnd /drawing-analyses 호출
@@ -194,6 +207,8 @@ export default function AnalyzingPage() {
                     box_images_base64: boxImagesBase64,
                     psychological_interpretation: psychologicalInterpretation,
                     comparison: data?.comparison || {},
+                    recommendations: Array.isArray((data as any)?.recommendations) ? (data as any).recommendations : [],
+                    overall_psychology_result: (data as any)?.전체_심리_결과 && typeof (data as any).전체_심리_결과 === "object" ? (data as any).전체_심리_결과 : {},
                   }),
                 })
                 if (!saveRes.ok) {
@@ -213,6 +228,8 @@ export default function AnalyzingPage() {
         }, 500)
       })
       .catch((err: Error) => {
+        clearInterval(progressInterval)
+        clearInterval(elapsedInterval)
         setError(err.message || "분석 요청 중 오류가 발생했습니다.")
       })
       .finally(() => {
@@ -229,7 +246,7 @@ export default function AnalyzingPage() {
   }, [progress])
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-secondary/30 to-background flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-gradient-to-b from-secondary/30 to-background flex items-center justify-center p-4 overflow-hidden">
       <div className="w-full max-w-lg">
         <Card className="border-border/50 shadow-xl">
           <CardContent className="p-8">
@@ -261,9 +278,14 @@ export default function AnalyzingPage() {
             <div className="space-y-4 mb-8">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">분석 진행률</span>
-                <span className="font-semibold text-primary">{progress}%</span>
+                <span className="font-semibold text-primary">{Math.round(progress)}%</span>
               </div>
               <Progress value={progress} className="h-3" />
+              <p className="text-sm text-muted-foreground text-center">
+                {completedDurationMs != null
+                  ? `분석 완료 · 소요 시간 ${completedDurationMs >= 60000 ? `${Math.floor(completedDurationMs / 60000)}분 ` : ""}${Math.round((completedDurationMs % 60000) / 1000)}초`
+                  : `소요 시간 ${Math.floor(elapsedSeconds / 60)}분 ${elapsedSeconds % 60}초`}
+              </p>
             </div>
 
             {error && (
@@ -335,16 +357,16 @@ export default function AnalyzingPage() {
             </div>
 
             {/* Tip */}
-            <div className="bg-accent/10 rounded-xl p-4 border border-accent/20">
+            <div className="rounded-xl p-4 border border-slate-200 bg-slate-100 dark:bg-slate-800/80 dark:border-slate-700">
               <div className="flex gap-3">
-                <div className="h-8 w-8 rounded-full bg-accent/20 flex items-center justify-center shrink-0">
-                  <Lightbulb className="h-4 w-4 text-accent-foreground" />
+                <div className="h-8 w-8 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center shrink-0">
+                  <Lightbulb className="h-4 w-4 text-amber-700 dark:text-amber-400" />
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-accent-foreground mb-1">
+                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                     알고 계셨나요?
                   </p>
-                  <p className="text-sm text-muted-foreground leading-relaxed transition-opacity">
+                  <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed transition-opacity">
                     {tips[currentTip]}
                   </p>
                 </div>

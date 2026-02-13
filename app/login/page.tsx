@@ -1,31 +1,38 @@
-"use client"
+"use client";
 
-import React from "react"
+import React from "react";
 
-import { useState } from "react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Eye, EyeOff, ArrowLeft } from "lucide-react"
+import { useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Eye, EyeOff, ArrowLeft } from "lucide-react";
 
 export default function LoginPage() {
-  const router = useRouter()
-  const [showPassword, setShowPassword] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
+  const router = useRouter();
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const apiBaseUrl =
+    process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
   const [formData, setFormData] = useState({
     email: "",
     password: "",
     rememberMe: false,
-  })
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
+    e.preventDefault();
+    setIsLoading(true);
     try {
       const response = await fetch(`${apiBaseUrl}/auth/login`, {
         method: "POST",
@@ -34,30 +41,34 @@ export default function LoginPage() {
           email: formData.email,
           password: formData.password,
         }),
-      })
+      });
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        const message = errorData?.detail?.message || "로그인에 실패했습니다."
-        throw new Error(message)
+        const errorData = await response.json().catch(() => ({}));
+        const message = errorData?.detail?.message || "로그인에 실패했습니다.";
+        throw new Error(message);
       }
-      const data = await response.json()
-      const storage = formData.rememberMe ? localStorage : sessionStorage
-      storage.setItem("auth_token", data.token)
-      storage.setItem("auth_email", formData.email)
-      router.push("/mypage")
+      const data = await response.json();
+      const storage = formData.rememberMe ? localStorage : sessionStorage;
+      storage.setItem("auth_token", data.token);
+      storage.setItem("auth_email", formData.email);
+      router.push("/mypage");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "로그인에 실패했습니다."
-      alert(message)
+      const message =
+        error instanceof Error ? error.message : "로그인에 실패했습니다.";
+      alert(message);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="fixed inset-0 bg-slate-50 flex flex-col overflow-hidden">
       {/* Header */}
       <header className="p-4 lg:p-6">
-        <Link href="/" className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors"
+        >
           <ArrowLeft className="h-4 w-4" />
           <span className="text-sm">홈으로 돌아가기</span>
         </Link>
@@ -68,17 +79,20 @@ export default function LoginPage() {
         <div className="w-full max-w-md space-y-6">
           {/* Logo */}
           <div className="text-center space-y-2">
-            <Link href="/" className="inline-flex items-center gap-2.5 justify-center">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2.5 justify-center"
+            >
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary">
-                <img
-                  src="/moms-smile.svg"
-                  alt="아이마음"
-                  className="h-6 w-6"
-                />
+                <img src="/moms-smile.svg" alt="아이마음" className="h-6 w-6" />
               </div>
-              <span className="text-2xl font-bold text-foreground">아이마음</span>
+              <span className="text-2xl font-bold text-foreground">
+                아이마음
+              </span>
             </Link>
-            <p className="text-muted-foreground">아이의 마음을 이해하는 첫 걸음</p>
+            <p className="text-muted-foreground">
+              아이의 마음을 이해하는 첫 걸음
+            </p>
           </div>
 
           {/* Login Card */}
@@ -98,7 +112,9 @@ export default function LoginPage() {
                     type="email"
                     placeholder="example@email.com"
                     value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, email: e.target.value })
+                    }
                     required
                   />
                 </div>
@@ -111,7 +127,9 @@ export default function LoginPage() {
                       type={showPassword ? "text" : "password"}
                       placeholder="비밀번호를 입력하세요"
                       value={formData.password}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, password: e.target.value })
+                      }
                       required
                     />
                     <Button
@@ -137,10 +155,16 @@ export default function LoginPage() {
                       id="remember"
                       checked={formData.rememberMe}
                       onCheckedChange={(checked) =>
-                        setFormData({ ...formData, rememberMe: checked === true })
+                        setFormData({
+                          ...formData,
+                          rememberMe: checked === true,
+                        })
                       }
                     />
-                    <Label htmlFor="remember" className="text-sm font-normal cursor-pointer">
+                    <Label
+                      htmlFor="remember"
+                      className="text-sm font-normal cursor-pointer"
+                    >
                       로그인 상태 유지
                     </Label>
                   </div>
@@ -152,7 +176,11 @@ export default function LoginPage() {
                   </Link>
                 </div>
 
-                <Button type="submit" className="w-full rounded-lg" disabled={isLoading}>
+                <Button
+                  type="submit"
+                  className="w-full rounded-lg"
+                  disabled={isLoading}
+                >
                   {isLoading ? "로그인 중..." : "로그인"}
                 </Button>
               </form>
@@ -162,12 +190,18 @@ export default function LoginPage() {
                   <div className="w-full border-t border-border" />
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">또는</span>
+                  <span className="bg-card px-2 text-muted-foreground">
+                    또는
+                  </span>
                 </div>
               </div>
 
               <div className="space-y-3">
-                <Button variant="outline" className="w-full gap-2 bg-transparent" type="button">
+                <Button
+                  variant="outline"
+                  className="w-full gap-2 bg-transparent"
+                  type="button"
+                >
                   <svg className="h-4 w-4" viewBox="0 0 24 24">
                     <path
                       fill="currentColor"
@@ -188,7 +222,11 @@ export default function LoginPage() {
                   </svg>
                   Google로 계속하기
                 </Button>
-                <Button variant="outline" className="w-full gap-2 bg-[#FEE500] hover:bg-[#FEE500]/90 text-[#191919] border-[#FEE500]" type="button">
+                <Button
+                  variant="outline"
+                  className="w-full gap-2 bg-[#FEE500] hover:bg-[#FEE500]/90 text-[#191919] border-[#FEE500]"
+                  type="button"
+                >
                   <svg className="h-4 w-4" viewBox="0 0 24 24">
                     <path
                       fill="currentColor"
@@ -204,12 +242,15 @@ export default function LoginPage() {
           {/* Sign Up Link */}
           <p className="text-center text-sm text-muted-foreground">
             아직 계정이 없으신가요?{" "}
-            <Link href="/signup" className="text-primary font-medium hover:underline">
+            <Link
+              href="/signup"
+              className="text-primary font-medium hover:underline"
+            >
               회원가입
             </Link>
           </p>
         </div>
       </main>
     </div>
-  )
+  );
 }

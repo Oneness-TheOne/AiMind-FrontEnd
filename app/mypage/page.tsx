@@ -68,7 +68,10 @@ export interface DrawingAnalysisItem {
   created_at: string;
   element_analysis: Record<string, unknown>;
   analyzed_image_urls: Record<string, string>;
-  psychological_interpretation: Record<string, { interpretation?: unknown; analysis?: unknown }>;
+  psychological_interpretation: Record<
+    string,
+    { interpretation?: unknown; analysis?: unknown }
+  >;
   comparison: Record<string, unknown>;
 }
 
@@ -111,10 +114,15 @@ function mapDrawingToHistory(d: DrawingAnalysisItem): AnalysisHistory {
     ? "-"
     : `${created.getFullYear()}.${String(created.getMonth() + 1).padStart(2, "0")}.${String(created.getDate()).padStart(2, "0")}`;
   const child = d.child_info || {};
-  const score = typeof (d.comparison as { overall_score?: number })?.overall_score === "number"
-    ? (d.comparison as { overall_score: number }).overall_score
-    : 0;
-  const firstUrl = d.analyzed_image_urls?.tree || d.analyzed_image_urls?.house || "/placeholder.svg";
+  const score =
+    typeof (d.comparison as { overall_score?: number })?.overall_score ===
+    "number"
+      ? (d.comparison as { overall_score: number }).overall_score
+      : 0;
+  const firstUrl =
+    d.analyzed_image_urls?.tree ||
+    d.analyzed_image_urls?.house ||
+    "/placeholder.svg";
   return {
     id: d.id,
     date: dateStr,
@@ -175,7 +183,9 @@ export default function MyPage() {
     created_at: "",
   });
   const [userId, setUserId] = useState<number | null>(null);
-  const [drawingAnalyses, setDrawingAnalyses] = useState<DrawingAnalysisItem[]>([]);
+  const [drawingAnalyses, setDrawingAnalyses] = useState<DrawingAnalysisItem[]>(
+    [],
+  );
   const [drawingAnalysesLoading, setDrawingAnalysesLoading] = useState(false);
   const [children, setChildren] = useState<ChildItem[]>([]);
   const [childrenLoading, setChildrenLoading] = useState(false);
@@ -206,8 +216,7 @@ export default function MyPage() {
       ? analysisHistoryList.filter((a) => {
           const ci = a.rawDrawing?.child_info || {};
           const nameMatch = (ci.name as string) === selectedChild.name;
-          const ageMatch =
-            String(ci.age) === String(selectedChild.age);
+          const ageMatch = String(ci.age) === String(selectedChild.age);
           const genderMatch =
             (ci.gender as string) === selectedChild.gender ||
             (ci.gender === "남" && selectedChild.gender === "male") ||
@@ -286,7 +295,8 @@ export default function MyPage() {
   const handleViewDrawingAnalysis = async (doc: DrawingAnalysisItem) => {
     const token =
       typeof window !== "undefined"
-        ? localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token")
+        ? localStorage.getItem("auth_token") ||
+          sessionStorage.getItem("auth_token")
         : null;
     let resolved = doc;
     if (token) {
@@ -315,7 +325,8 @@ export default function MyPage() {
         const analysis = psych.analysis;
         acc[key] = {
           label: labels[key],
-          image_json: (resolved.element_analysis?.[key] as Record<string, unknown>) || {},
+          image_json:
+            (resolved.element_analysis?.[key] as Record<string, unknown>) || {},
           interpretation: interp,
           analysis: analysis || interp,
           box_image_base64: resolved.analyzed_image_urls?.[key] || null,
@@ -325,12 +336,15 @@ export default function MyPage() {
       },
       {} as Record<string, unknown>,
     );
+    const r = resolved as unknown as Record<string, unknown>
     const response = {
       success: true,
       child: resolved.child_info || { name: "-", age: "-", gender: "" },
       results,
       comparison: resolved.comparison || {},
-    };
+      recommendations: Array.isArray(r.recommendations) ? r.recommendations : [],
+      ...(r.전체_심리_결과 != null && typeof r.전체_심리_결과 === "object" ? { 전체_심리_결과: r.전체_심리_결과 } : {}),
+    }
     const globalStore = globalThis as typeof globalThis & {
       __analysisResponse?: unknown;
       __analysisImages?: string[];
@@ -501,7 +515,8 @@ export default function MyPage() {
     }
     const token =
       typeof window !== "undefined"
-        ? localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token")
+        ? localStorage.getItem("auth_token") ||
+          sessionStorage.getItem("auth_token")
         : null;
     if (!token) {
       setDrawingAnalyses([]);
@@ -534,7 +549,8 @@ export default function MyPage() {
     }
     const token =
       typeof window !== "undefined"
-        ? localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token")
+        ? localStorage.getItem("auth_token") ||
+          sessionStorage.getItem("auth_token")
         : null;
     if (!token) {
       setDiaryEntries([]);
@@ -551,14 +567,16 @@ export default function MyPage() {
           const normalized: DiaryEntry[] = data.map((d) => {
             const item = d as Record<string, unknown>;
             return {
-            id: String(item?.id ?? ""),
-            imageUrl: String(item?.image_url ?? ""),
-            extractedText: String(item?.corrected_text ?? item?.original_text ?? ""),
-            date: String(item?.date ?? ""),
-            title: String(item?.title ?? ""),
-            weather: item?.weather as string | undefined,
-            childName: item?.child_name as string | undefined,
-          };
+              id: String(item?.id ?? ""),
+              imageUrl: String(item?.image_url ?? ""),
+              extractedText: String(
+                item?.corrected_text ?? item?.original_text ?? "",
+              ),
+              date: String(item?.date ?? ""),
+              title: String(item?.title ?? ""),
+              weather: item?.weather as string | undefined,
+              childName: item?.child_name as string | undefined,
+            };
           });
           setDiaryEntries(normalized);
         }
@@ -692,7 +710,7 @@ export default function MyPage() {
                         <Label htmlFor="child-name">이름</Label>
                         <Input
                           id="child-name"
-                          placeholder="예: 민준이"
+                          placeholder="예: 홍길동"
                           value={addChildForm.name}
                           onChange={(e) =>
                             setAddChildForm((prev) => ({
@@ -1001,27 +1019,28 @@ export default function MyPage() {
                   )
                     .slice(0, 3)
                     .map((analysis, index) => (
-                    <AnalysisCard
-                      key={analysis.id}
-                      analysis={analysis}
-                      delay={600 + index * 100}
-                      isVisible={isVisible}
-                      onView={
-                        analysis.rawDrawing
-                          ? () => handleViewDrawingAnalysis(analysis.rawDrawing!)
-                          : undefined
-                      }
-                    />
-                  ))}
+                      <AnalysisCard
+                        key={analysis.id}
+                        analysis={analysis}
+                        delay={600 + index * 100}
+                        isVisible={isVisible}
+                        onView={
+                          analysis.rawDrawing
+                            ? () =>
+                                handleViewDrawingAnalysis(analysis.rawDrawing!)
+                            : undefined
+                        }
+                      />
+                    ))}
                   {drawingAnalysesLoading &&
                     (selectedChild
                       ? filteredAnalysisHistoryList
                       : analysisHistoryList
                     ).length === 0 && (
-                    <p className="text-sm text-slate-500 py-4">
-                      분석 기록 불러오는 중...
-                    </p>
-                  )}
+                      <p className="text-sm text-slate-500 py-4">
+                        분석 기록 불러오는 중...
+                      </p>
+                    )}
                   {!drawingAnalysesLoading &&
                     userId != null &&
                     (selectedChild
@@ -1104,7 +1123,8 @@ export default function MyPage() {
                         isVisible={true}
                         onView={
                           analysis.rawDrawing
-                            ? () => handleViewDrawingAnalysis(analysis.rawDrawing!)
+                            ? () =>
+                                handleViewDrawingAnalysis(analysis.rawDrawing!)
                             : undefined
                         }
                       />
@@ -1228,7 +1248,9 @@ export default function MyPage() {
               {/* 그림일기 상세 다이얼로그 */}
               <Dialog open={diaryDetailOpen} onOpenChange={setDiaryDetailOpen}>
                 <DialogContent className="min-w-[900px] w-[95vw] max-w-[1600px] max-h-[90vh] overflow-y-auto">
-                  <DialogTitle className="sr-only">그림일기 상세보기</DialogTitle>
+                  <DialogTitle className="sr-only">
+                    그림일기 상세보기
+                  </DialogTitle>
                   <div className="grid grid-cols-1 md:grid-cols-[1.15fr_0.85fr] gap-6">
                     <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 flex flex-col min-h-0">
                       <p className="text-xs font-semibold text-slate-500 mb-2 flex items-center gap-1">
@@ -1237,7 +1259,9 @@ export default function MyPage() {
                       </p>
                       <div className="flex-1 flex justify-center items-center min-h-[280px] md:min-h-[60vh] bg-white rounded-lg border border-slate-200 overflow-hidden">
                         <img
-                          src={selectedDiaryEntry?.imageUrl || "/placeholder.svg"}
+                          src={
+                            selectedDiaryEntry?.imageUrl || "/placeholder.svg"
+                          }
                           alt="그림일기"
                           className="w-full max-w-full max-h-[55vh] md:max-h-[75vh] object-contain"
                         />

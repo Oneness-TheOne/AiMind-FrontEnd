@@ -1,87 +1,101 @@
-"use client"
+"use client";
 
-import React from "react"
+import React from "react";
 
-import { useState, useCallback, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { Header } from "@/components/layout/header"
-import { Footer } from "@/components/layout/footer"
-import { VideoHero } from "@/components/shared/video-hero"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Upload, ImageIcon, Pencil, Info, ArrowRight, X } from "lucide-react"
-import { DrawingCanvas } from "@/components/analysis/drawing-canvas"
+import { useState, useCallback, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Header } from "@/components/layout/header";
+import { Footer } from "@/components/layout/footer";
+import { VideoHero } from "@/components/shared/video-hero";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Upload, ImageIcon, Pencil, Info, ArrowRight, X } from "lucide-react";
+import { DrawingCanvas } from "@/components/analysis/drawing-canvas";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
+} from "@/components/ui/dialog";
 
 export default function AnalysisPage() {
-  const router = useRouter()
+  const router = useRouter();
   const createEmptySlots = () =>
-    Array.from({ length: 4 }, () => ({ preview: null as string | null, file: null as File | null }))
-  const [uploadedImages, setUploadedImages] = useState(createEmptySlots)
-  const [inputMode, setInputMode] = useState<"upload" | "draw">("upload")
+    Array.from({ length: 4 }, () => ({
+      preview: null as string | null,
+      file: null as File | null,
+    }));
+  const [uploadedImages, setUploadedImages] = useState(createEmptySlots);
+  const [inputMode, setInputMode] = useState<"upload" | "draw">("upload");
   const [childInfo, setChildInfo] = useState({
     name: "",
     age: "",
     gender: "",
-  })
-  const [selectedChildId, setSelectedChildId] = useState<string>("")
-  const [children, setChildren] = useState<{ id: number; name: string; age: number; gender: string }[]>([])
-  const [childrenLoading, setChildrenLoading] = useState(false)
-  const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [submitError, setSubmitError] = useState<string | null>(null)
-  const [drawingSlotIndex, setDrawingSlotIndex] = useState<number | null>(null)
+  });
+  const [selectedChildId, setSelectedChildId] = useState<string>("");
+  const [children, setChildren] = useState<
+    { id: number; name: string; age: number; gender: string }[]
+  >([]);
+  const [childrenLoading, setChildrenLoading] = useState(false);
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+  const apiBaseUrl =
+    process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [drawingSlotIndex, setDrawingSlotIndex] = useState<number | null>(null);
 
   useEffect(() => {
     const token =
       typeof window !== "undefined"
-        ? localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token")
-        : null
-    if (!token) return
-    setChildrenLoading(true)
+        ? localStorage.getItem("auth_token") ||
+          sessionStorage.getItem("auth_token")
+        : null;
+    if (!token) return;
+    setChildrenLoading(true);
     fetch(`${apiBaseUrl}/children`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => (res.ok ? res.json() : []))
       .then((list) => {
-        if (Array.isArray(list)) setChildren(list)
+        if (Array.isArray(list)) setChildren(list);
       })
       .catch(() => setChildren([]))
-      .finally(() => setChildrenLoading(false))
-  }, [apiBaseUrl])
+      .finally(() => setChildrenLoading(false));
+  }, [apiBaseUrl]);
 
-  const DIRECT_INPUT_VALUE = "__direct__"
+  const DIRECT_INPUT_VALUE = "__direct__";
   const handleSelectChild = (childId: string) => {
-    const isDirect = childId === DIRECT_INPUT_VALUE || !childId
-    setSelectedChildId(isDirect ? "" : childId)
+    const isDirect = childId === DIRECT_INPUT_VALUE || !childId;
+    setSelectedChildId(isDirect ? "" : childId);
     if (isDirect) {
-      setChildInfo({ name: "", age: "", gender: "" })
-      return
+      setChildInfo({ name: "", age: "", gender: "" });
+      return;
     }
-    const child = children.find((c) => c.id === parseInt(childId, 10))
+    const child = children.find((c) => c.id === parseInt(childId, 10));
     if (child) {
       setChildInfo({
         name: child.name,
         age: child.age.toString(),
         gender: child.gender,
-      })
+      });
     }
-  }
-
-  const getWeightPath = (objectKey: string, gender: string) => {
-    const genderFolder = gender === "male" ? "male" : gender === "female" ? "female" : "male"
-    return `image_to_json/${objectKey}_weights/${genderFolder}/best.pt`
-  }
+  };
 
   const slotConfigs = [
     {
@@ -100,174 +114,187 @@ export default function AnalysisPage() {
       objectKey: "woman",
       label: "여자사람",
     },
-  ]
+  ];
 
   const dataUrlToFile = (dataUrl: string, filename: string) => {
-    const [header, data] = dataUrl.split(",")
-    const mimeMatch = header?.match(/data:(.*?);base64/)
-    const mime = mimeMatch ? mimeMatch[1] : "image/png"
-    const binary = atob(data)
-    const array = new Uint8Array(binary.length)
+    const [header, data] = dataUrl.split(",");
+    const mimeMatch = header?.match(/data:(.*?);base64/);
+    const mime = mimeMatch ? mimeMatch[1] : "image/png";
+    const binary = atob(data);
+    const array = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i += 1) {
-      array[i] = binary.charCodeAt(i)
+      array[i] = binary.charCodeAt(i);
     }
-    return new File([array], filename, { type: mime })
-  }
+    return new File([array], filename, { type: mime });
+  };
 
-  const resizeImageFile = useCallback(async (file: File, maxSize = 1024, quality = 0.82) => {
-    const imageUrl = URL.createObjectURL(file)
-    try {
-      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-        const el = new Image()
-        el.onload = () => resolve(el)
-        el.onerror = () => reject(new Error("이미지 로드 실패"))
-        el.src = imageUrl
-      })
+  const resizeImageFile = useCallback(
+    async (file: File, maxSize = 1024, quality = 0.82) => {
+      const imageUrl = URL.createObjectURL(file);
+      try {
+        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const el = new Image();
+          el.onload = () => resolve(el);
+          el.onerror = () => reject(new Error("이미지 로드 실패"));
+          el.src = imageUrl;
+        });
 
-      const scale = Math.min(1, maxSize / Math.max(img.width, img.height))
-      const targetW = Math.max(1, Math.round(img.width * scale))
-      const targetH = Math.max(1, Math.round(img.height * scale))
-      const canvas = document.createElement("canvas")
-      canvas.width = targetW
-      canvas.height = targetH
-      const ctx = canvas.getContext("2d")
-      if (!ctx) {
-        throw new Error("캔버스 생성 실패")
+        const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+        const targetW = Math.max(1, Math.round(img.width * scale));
+        const targetH = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          throw new Error("캔버스 생성 실패");
+        }
+        ctx.drawImage(img, 0, 0, targetW, targetH);
+        const dataUrl = canvas.toDataURL("image/jpeg", quality);
+        const resizedFile = dataUrlToFile(
+          dataUrl,
+          file.name.replace(/\.(png|jpg|jpeg|webp)$/i, ".jpg"),
+        );
+        return { preview: dataUrl, file: resizedFile };
+      } finally {
+        URL.revokeObjectURL(imageUrl);
       }
-      ctx.drawImage(img, 0, 0, targetW, targetH)
-      const dataUrl = canvas.toDataURL("image/jpeg", quality)
-      const resizedFile = dataUrlToFile(dataUrl, file.name.replace(/\.(png|jpg|jpeg|webp)$/i, ".jpg"))
-      return { preview: dataUrl, file: resizedFile }
-    } finally {
-      URL.revokeObjectURL(imageUrl)
-    }
-  }, [])
+    },
+    [],
+  );
 
   const applyFileToSlot = useCallback(
     async (index: number, file: File) => {
-      if (!file.type.startsWith("image/")) return
+      if (!file.type.startsWith("image/")) return;
       try {
-        const resized = await resizeImageFile(file)
+        const resized = await resizeImageFile(file);
         setUploadedImages((prev) => {
-          const next = [...prev]
-          next[index] = resized
-          return next
-        })
+          const next = [...prev];
+          next[index] = resized;
+          return next;
+        });
       } catch {
-        const reader = new FileReader()
+        const reader = new FileReader();
         reader.onload = () => {
           setUploadedImages((prev) => {
-            const next = [...prev]
-            next[index] = { preview: reader.result as string, file }
-            return next
-          })
-        }
-        reader.readAsDataURL(file)
+            const next = [...prev];
+            next[index] = { preview: reader.result as string, file };
+            return next;
+          });
+        };
+        reader.readAsDataURL(file);
       }
     },
-    [resizeImageFile]
-  )
+    [resizeImageFile],
+  );
 
   const handleDragOver = useCallback((index: number, e: React.DragEvent) => {
-    e.preventDefault()
-    setDraggingIndex(index)
-  }, [])
+    e.preventDefault();
+    setDraggingIndex(index);
+  }, []);
 
   const handleDragLeave = useCallback((index: number, e: React.DragEvent) => {
-    e.preventDefault()
-    setDraggingIndex((prev) => (prev === index ? null : prev))
-  }, [])
+    e.preventDefault();
+    setDraggingIndex((prev) => (prev === index ? null : prev));
+  }, []);
 
   const handleDrop = useCallback(
     (index: number, e: React.DragEvent) => {
-      e.preventDefault()
-      setDraggingIndex(null)
-      const file = e.dataTransfer.files[0]
+      e.preventDefault();
+      setDraggingIndex(null);
+      const file = e.dataTransfer.files[0];
       if (file) {
-        applyFileToSlot(index, file)
+        applyFileToSlot(index, file);
       }
     },
-    [applyFileToSlot]
-  )
+    [applyFileToSlot],
+  );
 
   const handleFileSelect = useCallback(
     (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0]
+      const file = e.target.files?.[0];
       if (file) {
-        applyFileToSlot(index, file)
+        applyFileToSlot(index, file);
       }
     },
-    [applyFileToSlot]
-  )
+    [applyFileToSlot],
+  );
 
   const handleAnalyze = async () => {
-    if (isSubmitting) return
-    setSubmitError(null)
-    setIsSubmitting(true)
+    if (isSubmitting) return;
+    setSubmitError(null);
+    setIsSubmitting(true);
 
-    const hasAllImages = uploadedImages.every((slot) => slot.file && slot.preview)
+    const hasAllImages = uploadedImages.every(
+      (slot) => slot.file && slot.preview,
+    );
     if (!hasAllImages) {
-      setSubmitError("분석에 필요한 그림 4장을 모두 업로드해주세요.")
-      setIsSubmitting(false)
-      return
+      setSubmitError("분석에 필요한 그림 4장을 모두 업로드해주세요.");
+      setIsSubmitting(false);
+      return;
     }
     if (!childInfo.age) {
-      setSubmitError("아이의 나이를 선택해주세요.")
-      setIsSubmitting(false)
-      return
+      setSubmitError("아이의 나이를 선택해주세요.");
+      setIsSubmitting(false);
+      return;
     }
 
-    const imagePreviews = uploadedImages.map((slot) => slot.preview || "")
+    const imagePreviews = uploadedImages.map((slot) => slot.preview || "");
     const payload = {
       images: imagePreviews,
-      slots: slotConfigs.map((s) => ({ label: s.label, objectKey: s.objectKey })),
+      slots: slotConfigs.map((s) => ({
+        label: s.label,
+        objectKey: s.objectKey,
+      })),
       childInfo: {
         name: childInfo.name || "",
         age: childInfo.age || "",
         gender: childInfo.gender || "",
       },
-    }
-    const files = uploadedImages.map((slot) => slot.file)
+    };
+    const files = uploadedImages.map((slot) => slot.file);
 
     const globalStore = globalThis as typeof globalThis & {
-      __analysisPayload?: typeof payload
-      __analysisFiles?: (File | null)[]
-    }
-    globalStore.__analysisPayload = payload
-    globalStore.__analysisFiles = files
+      __analysisPayload?: typeof payload;
+      __analysisFiles?: (File | null)[];
+    };
+    globalStore.__analysisPayload = payload;
+    globalStore.__analysisFiles = files;
 
-    setIsSubmitting(false)
-    router.push("/analysis/analyzing")
-  }
+    setIsSubmitting(false);
+    router.push("/analysis/analyzing");
+  };
 
   const handleSaveDrawing = async (imageData: string) => {
-    if (drawingSlotIndex === null) return
-    
-    const filename = `${slotConfigs[drawingSlotIndex]?.label || "drawing"}.png`
-    const file = dataUrlToFile(imageData, filename)
+    if (drawingSlotIndex === null) return;
+
+    const filename = `${slotConfigs[drawingSlotIndex]?.label || "drawing"}.png`;
+    const file = dataUrlToFile(imageData, filename);
     try {
-      const resized = await resizeImageFile(file)
+      const resized = await resizeImageFile(file);
       setUploadedImages((prev) => {
-        const next = [...prev]
-        next[drawingSlotIndex] = resized
-        return next
-      })
+        const next = [...prev];
+        next[drawingSlotIndex] = resized;
+        return next;
+      });
     } catch {
       setUploadedImages((prev) => {
-        const next = [...prev]
-        next[drawingSlotIndex] = { preview: imageData, file }
-        return next
-      })
+        const next = [...prev];
+        next[drawingSlotIndex] = { preview: imageData, file };
+        return next;
+      });
     }
-    setDrawingSlotIndex(null)
-  }
+    setDrawingSlotIndex(null);
+  };
 
-  const hasAllImages = uploadedImages.every((slot) => slot.file && slot.preview)
+  const hasAllImages = uploadedImages.every(
+    (slot) => slot.file && slot.preview,
+  );
 
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
-      
+
       {/* Video Hero */}
       <div className="-mt-14">
         <VideoHero
@@ -280,7 +307,6 @@ export default function AnalysisPage() {
 
       <main className="flex-1 bg-slate-50">
         <div className="container mx-auto px-4 py-12">
-
           <div className="max-w-4xl mx-auto">
             <div className="flex flex-col gap-8">
               {/* Upload/Draw Section */}
@@ -295,7 +321,11 @@ export default function AnalysisPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <Tabs value={inputMode} onValueChange={(v) => setInputMode(v as "upload" | "draw")} className="w-full">
+                  <Tabs
+                    value={inputMode}
+                    onValueChange={(v) => setInputMode(v as "upload" | "draw")}
+                    className="w-full"
+                  >
                     <TabsList className="grid w-full grid-cols-2 mb-4">
                       <TabsTrigger value="upload" className="gap-2">
                         <Upload className="h-4 w-4" />
@@ -306,13 +336,13 @@ export default function AnalysisPage() {
                         직접 그리기
                       </TabsTrigger>
                     </TabsList>
-                    
+
                     <TabsContent value="upload" className="mt-0">
                       <div className="grid gap-4 md:grid-cols-2">
                         {uploadedImages.map((image, index) => {
-                          const inputId = `file-upload-${index}`
-                          const isDragging = draggingIndex === index
-                          const slot = slotConfigs[index]
+                          const inputId = `file-upload-${index}`;
+                          const isDragging = draggingIndex === index;
+                          const slot = slotConfigs[index];
                           return (
                             <div
                               key={inputId}
@@ -341,9 +371,12 @@ export default function AnalysisPage() {
                                     className="absolute top-2 right-2"
                                     onClick={() =>
                                       setUploadedImages((prev) => {
-                                        const next = [...prev]
-                                        next[index] = { preview: null, file: null }
-                                        return next
+                                        const next = [...prev];
+                                        next[index] = {
+                                          preview: null,
+                                          file: null,
+                                        };
+                                        return next;
                                       })
                                     }
                                   >
@@ -362,9 +395,6 @@ export default function AnalysisPage() {
                                     <p className="text-xs text-muted-foreground">
                                       드래그하거나 클릭해서 선택
                                     </p>
-                                    <p className="mt-1 text-[11px] text-muted-foreground">
-                                      {getWeightPath(slot.objectKey, childInfo.gender || "male")}
-                                    </p>
                                   </div>
                                   <input
                                     type="file"
@@ -374,25 +404,29 @@ export default function AnalysisPage() {
                                     id={inputId}
                                   />
                                   <label htmlFor={inputId}>
-                                    <Button variant="outline" className="bg-transparent cursor-pointer" asChild>
+                                    <Button
+                                      variant="outline"
+                                      className="bg-transparent cursor-pointer"
+                                      asChild
+                                    >
                                       <span>파일 선택</span>
                                     </Button>
                                   </label>
                                 </div>
                               )}
                             </div>
-                          )
+                          );
                         })}
                       </div>
                       <p className="mt-4 text-xs text-muted-foreground">
                         지원 형식: JPG, PNG, HEIC (최대 10MB)
                       </p>
                     </TabsContent>
-                    
+
                     <TabsContent value="draw" className="mt-0">
                       <div className="grid gap-4 md:grid-cols-2">
                         {slotConfigs.map((slot, index) => {
-                          const hasImage = uploadedImages[index]?.preview
+                          const hasImage = uploadedImages[index]?.preview;
                           return (
                             <div
                               key={index}
@@ -416,10 +450,13 @@ export default function AnalysisPage() {
                                         className="flex-1"
                                         onClick={() => {
                                           setUploadedImages((prev) => {
-                                            const next = [...prev]
-                                            next[index] = { preview: null, file: null }
-                                            return next
-                                          })
+                                            const next = [...prev];
+                                            next[index] = {
+                                              preview: null,
+                                              file: null,
+                                            };
+                                            return next;
+                                          });
                                         }}
                                       >
                                         <X className="h-4 w-4 mr-2" />
@@ -427,7 +464,9 @@ export default function AnalysisPage() {
                                       </Button>
                                       <Button
                                         className="flex-1"
-                                        onClick={() => setDrawingSlotIndex(index)}
+                                        onClick={() =>
+                                          setDrawingSlotIndex(index)
+                                        }
                                       >
                                         <Pencil className="h-4 w-4 mr-2" />
                                         다시 그리기
@@ -458,11 +497,12 @@ export default function AnalysisPage() {
                                 )}
                               </div>
                             </div>
-                          )
+                          );
                         })}
                       </div>
                       <p className="mt-4 text-xs text-muted-foreground text-center">
-                        각 그림을 클릭하여 그릴 수 있습니다. 검정 펜으로 그려주세요.
+                        각 그림을 클릭하여 그릴 수 있습니다. 검정 펜으로
+                        그려주세요.
                       </p>
                     </TabsContent>
                   </Tabs>
@@ -489,13 +529,25 @@ export default function AnalysisPage() {
                       disabled={childrenLoading}
                     >
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder={childrenLoading ? "불러오는 중..." : "아이를 선택하세요 (또는 직접 입력)"} />
+                        <SelectValue
+                          placeholder={
+                            childrenLoading
+                              ? "불러오는 중..."
+                              : "아이를 선택하세요 (또는 직접 입력)"
+                          }
+                        />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value={DIRECT_INPUT_VALUE}>직접 입력</SelectItem>
+                        <SelectItem value={DIRECT_INPUT_VALUE}>
+                          직접 입력
+                        </SelectItem>
                         {children.map((child) => (
-                          <SelectItem key={child.id} value={child.id.toString()}>
-                            {child.name} ({child.age}세, {child.gender === "male" ? "남아" : "여아"})
+                          <SelectItem
+                            key={child.id}
+                            value={child.id.toString()}
+                          >
+                            {child.name} ({child.age}세,{" "}
+                            {child.gender === "male" ? "남아" : "여아"})
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -503,14 +555,14 @@ export default function AnalysisPage() {
                   </div>
                   <div className="grid gap-4 md:grid-cols-3">
                     <div className="space-y-2">
-                      <Label htmlFor="name">아이 이름 (별명)</Label>
+                      <Label htmlFor="name">아이 이름</Label>
                       <Input
                         id="name"
-                        placeholder="예: 민준이"
+                        placeholder="예: 홍길동"
                         value={childInfo.name}
                         onChange={(e) => {
-                          setSelectedChildId("")
-                          setChildInfo({ ...childInfo, name: e.target.value })
+                          setSelectedChildId("");
+                          setChildInfo({ ...childInfo, name: e.target.value });
                         }}
                       />
                     </div>
@@ -520,19 +572,21 @@ export default function AnalysisPage() {
                       <Select
                         value={childInfo.age}
                         onValueChange={(value) => {
-                          setSelectedChildId("")
-                          setChildInfo({ ...childInfo, age: value })
+                          setSelectedChildId("");
+                          setChildInfo({ ...childInfo, age: value });
                         }}
                       >
                         <SelectTrigger className="w-full">
                           <SelectValue placeholder="나이 선택" />
                         </SelectTrigger>
                         <SelectContent>
-                          {Array.from({ length: 7 }, (_, i) => i + 7).map((age) => (
-                            <SelectItem key={age} value={age.toString()}>
-                              {age}세
-                            </SelectItem>
-                          ))}
+                          {Array.from({ length: 7 }, (_, i) => i + 7).map(
+                            (age) => (
+                              <SelectItem key={age} value={age.toString()}>
+                                {age}세
+                              </SelectItem>
+                            ),
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
@@ -542,8 +596,8 @@ export default function AnalysisPage() {
                       <Select
                         value={childInfo.gender}
                         onValueChange={(value) => {
-                          setSelectedChildId("")
-                          setChildInfo({ ...childInfo, gender: value })
+                          setSelectedChildId("");
+                          setChildInfo({ ...childInfo, gender: value });
                         }}
                       >
                         <SelectTrigger className="w-full">
@@ -580,14 +634,20 @@ export default function AnalysisPage() {
             {/* Guide Section */}
             <Card className="mt-8 border-border/50 bg-primary/5">
               <CardContent className="p-6">
-                <h3 className="font-semibold text-foreground mb-4">그림 분석 가이드</h3>
+                <h3 className="font-semibold text-foreground mb-4">
+                  그림 분석 가이드
+                </h3>
                 <div className="grid gap-4 md:grid-cols-3">
                   <div className="flex gap-3">
                     <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                      <span className="text-sm font-semibold text-primary">1</span>
+                      <span className="text-sm font-semibold text-primary">
+                        1
+                      </span>
                     </div>
                     <div>
-                      <p className="font-medium text-foreground text-sm">선명한 이미지</p>
+                      <p className="font-medium text-foreground text-sm">
+                        선명한 이미지
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         그림이 잘 보이도록 밝은 곳에서 촬영해주세요
                       </p>
@@ -595,10 +655,14 @@ export default function AnalysisPage() {
                   </div>
                   <div className="flex gap-3">
                     <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                      <span className="text-sm font-semibold text-primary">2</span>
+                      <span className="text-sm font-semibold text-primary">
+                        2
+                      </span>
                     </div>
                     <div>
-                      <p className="font-medium text-foreground text-sm">전체 그림 포함</p>
+                      <p className="font-medium text-foreground text-sm">
+                        전체 그림 포함
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         그림 전체가 프레임 안에 들어오도록 해주세요
                       </p>
@@ -606,10 +670,14 @@ export default function AnalysisPage() {
                   </div>
                   <div className="flex gap-3">
                     <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                      <span className="text-sm font-semibold text-primary">3</span>
+                      <span className="text-sm font-semibold text-primary">
+                        3
+                      </span>
                     </div>
                     <div>
-                      <p className="font-medium text-foreground text-sm">정확한 정보</p>
+                      <p className="font-medium text-foreground text-sm">
+                        정확한 정보
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         아이의 나이와 그림 유형을 정확히 선택해주세요
                       </p>
@@ -624,7 +692,10 @@ export default function AnalysisPage() {
       <Footer />
 
       {/* Drawing Dialog */}
-      <Dialog open={drawingSlotIndex !== null} onOpenChange={(open) => !open && setDrawingSlotIndex(null)}>
+      <Dialog
+        open={drawingSlotIndex !== null}
+        onOpenChange={(open) => !open && setDrawingSlotIndex(null)}
+      >
         <DialogContent className="min-w-[750px] max-w-none max-h-[90vh] p-6">
           <DialogHeader className="sr-only">
             <DialogTitle>
@@ -645,5 +716,5 @@ export default function AnalysisPage() {
         </DialogContent>
       </Dialog>
     </div>
-  )
+  );
 }

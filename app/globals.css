@@ -1,5 +1,5 @@
-@import 'tailwindcss';
-@import 'tw-animate-css';
+@import "tailwindcss";
+@import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -76,8 +76,8 @@
 }
 
 @theme inline {
-  --font-sans: var(--font-noto-sans-kr), 'Noto Sans KR', sans-serif;
-  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+  --font-sans: var(--font-noto-sans-kr), "Noto Sans KR", sans-serif;
+  --font-mono: "Geist Mono", "Geist Mono Fallback";
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -120,9 +120,19 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
   body {
     @apply bg-background text-foreground;
     padding-top: var(--header-height);
     scrollbar-gutter: stable;
+    scrollbar-width: none;
+  }
+  body::-webkit-scrollbar {
+    width: 0;
+    height: 0;
   }
 }

@@ -16,17 +16,8 @@ export const metadata: Metadata = {
   description: 'AI 기반 아동 그림 심리 분석으로 우리 아이의 마음을 이해하세요. 발달 단계 평가, 또래 비교, 맞춤 솔루션을 제공합니다.',
   generator: 'v0.app',
   icons: {
-    icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-    ],
-    apple: '/apple-icon.png',
+    icon: '/aimind.ico',
+    apple: '/aimind.png',
   },
 }
 

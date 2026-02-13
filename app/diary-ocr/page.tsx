@@ -5,13 +5,30 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { VideoHero } from "@/components/shared/video-hero";
 import { DiaryOCR } from "@/components/mypage/diary-ocr";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { BookOpen, Sparkles, Clock, Shield, Info } from "lucide-react";
 
-export type ChildOption = { id: number; name: string; age: number; gender: string };
+export type ChildOption = {
+  id: number;
+  name: string;
+  age: number;
+  gender: string;
+};
 const DIRECT_INPUT_VALUE = "__direct__";
 
 const features = [
@@ -38,7 +55,8 @@ const features = [
 ];
 
 export default function DiaryOCRPage() {
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+  const apiBaseUrl =
+    process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
   const [children, setChildren] = useState<ChildOption[]>([]);
   const [selectedChildId, setSelectedChildId] = useState<string>("");
   const [childrenLoading, setChildrenLoading] = useState(false);
@@ -47,7 +65,8 @@ export default function DiaryOCRPage() {
   useEffect(() => {
     const token =
       typeof window !== "undefined"
-        ? localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token")
+        ? localStorage.getItem("auth_token") ||
+          sessionStorage.getItem("auth_token")
         : null;
     if (!token) return;
     setChildrenLoading(true);
@@ -83,8 +102,13 @@ export default function DiaryOCRPage() {
     selectedChildId && selectedChildId !== DIRECT_INPUT_VALUE
       ? (children.find((c) => c.id === parseInt(selectedChildId, 10)) ?? null)
       : null;
-  const effectiveChildName = selectedChild ? selectedChild.name : childInfo.name;
-  const hasChildInfo = !!(selectedChild || (childInfo.name.trim() && childInfo.age && childInfo.gender));
+  const effectiveChildName = selectedChild
+    ? selectedChild.name
+    : childInfo.name;
+  const hasChildInfo = !!(
+    selectedChild ||
+    (childInfo.name.trim() && childInfo.age && childInfo.gender)
+  );
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -159,7 +183,9 @@ export default function DiaryOCRPage() {
                       />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={DIRECT_INPUT_VALUE}>직접 입력</SelectItem>
+                      <SelectItem value={DIRECT_INPUT_VALUE}>
+                        직접 입력
+                      </SelectItem>
                       {children.map((child) => (
                         <SelectItem key={child.id} value={String(child.id)}>
                           {child.name} ({child.age}세,{" "}
@@ -171,14 +197,17 @@ export default function DiaryOCRPage() {
                 </div>
                 <div className="grid gap-4 md:grid-cols-3">
                   <div className="space-y-2">
-                    <Label htmlFor="diary-child-name">아이 이름 (별명)</Label>
+                    <Label htmlFor="diary-child-name">아이 이름</Label>
                     <Input
                       id="diary-child-name"
-                      placeholder="예: 민준이"
+                      placeholder="예: 홍길동"
                       value={childInfo.name}
                       onChange={(e) => {
                         setSelectedChildId("");
-                        setChildInfo((prev) => ({ ...prev, name: e.target.value }));
+                        setChildInfo((prev) => ({
+                          ...prev,
+                          name: e.target.value,
+                        }));
                       }}
                     />
                   </div>
@@ -195,11 +224,13 @@ export default function DiaryOCRPage() {
                         <SelectValue placeholder="나이 선택" />
                       </SelectTrigger>
                       <SelectContent>
-                        {Array.from({ length: 7 }, (_, i) => i + 7).map((age) => (
-                          <SelectItem key={age} value={age.toString()}>
-                            {age}세
-                          </SelectItem>
-                        ))}
+                        {Array.from({ length: 7 }, (_, i) => i + 7).map(
+                          (age) => (
+                            <SelectItem key={age} value={age.toString()}>
+                              {age}세
+                            </SelectItem>
+                          ),
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
