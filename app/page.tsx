@@ -3,9 +3,14 @@ import { Footer } from "@/components/layout/footer"
 import { HeroSection } from "@/components/home/hero-section"
 import { FeaturesSection } from "@/components/home/features-section"
 import { StatsSection } from "@/components/home/stats-section"
-import { HowItWorksSection } from "@/components/home/how-it-works-section"
-import { DailyTipSection } from "@/components/home/daily-tip-section"
-import { CTASection } from "@/components/home/cta-section"
+import {
+  AnalysisShowcase,
+  DiaryShowcase,
+  ChatbotShowcase,
+  CommunityShowcase,
+  CounselingShowcase,
+  MypageShowcase,
+} from "@/components/home/feature-showcase-sections"
 
 export default function HomePage() {
   return (
@@ -18,9 +23,12 @@ export default function HomePage() {
         </div>
         <FeaturesSection />
         <StatsSection />
-        <HowItWorksSection />
-        <DailyTipSection />
-        <CTASection />
+        <AnalysisShowcase />
+        <DiaryShowcase />
+        <ChatbotShowcase />
+        <CommunityShowcase />
+        <CounselingShowcase />
+        <MypageShowcase />
       </main>
       <Footer />
     </div>
