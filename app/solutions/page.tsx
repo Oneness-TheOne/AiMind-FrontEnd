@@ -3645,63 +3645,74 @@ export default function SolutionsPage() {
         />
       </div>
 
-      <main className="flex-1 bg-slate-50">
+      <main className="flex-1 bg-gradient-to-b from-slate-50 to-white">
         {/* Main Content */}
-        <section className="pb-20">
-          <div className="container mx-auto px-4">
-            <Tabs defaultValue="therapy" className="space-y-8">
-              <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
-                <TabsTrigger value="therapy" className="gap-2">
-                  <Heart className="h-4 w-4 hidden sm:block" />
-                  치료법 제안
-                </TabsTrigger>
-                <TabsTrigger value="colors" className="gap-2">
-                  <Palette className="h-4 w-4 hidden sm:block" />
-                  색상 추천
-                </TabsTrigger>
-                <TabsTrigger value="activities" className="gap-2">
-                  <Lightbulb className="h-4 w-4 hidden sm:block" />
-                  활동 가이드
-                </TabsTrigger>
-                <TabsTrigger value="centers" className="gap-2">
-                  <MapPin className="h-4 w-4 hidden sm:block" />
-                  센터 찾기
-                </TabsTrigger>
-              </TabsList>
+        <section className="py-12 pb-20">
+          <div className="container mx-auto px-4 lg:px-8">
+            <Tabs defaultValue="therapy" className="space-y-10">
+              <div className="flex justify-center">
+                <TabsList className="grid w-full max-w-2xl grid-cols-4 h-auto p-1.5 bg-white shadow-lg shadow-slate-200/50 border border-slate-100 rounded-2xl">
+                  <TabsTrigger value="therapy" className="gap-2 rounded-xl py-3 data-[state=active]:bg-gradient-to-r data-[state=active]:from-teal-500 data-[state=active]:to-emerald-500 data-[state=active]:text-white data-[state=active]:shadow-md transition-all">
+                    <Heart className="h-4 w-4 hidden sm:block" />
+                    치료법 제안
+                  </TabsTrigger>
+                  <TabsTrigger value="colors" className="gap-2 rounded-xl py-3 data-[state=active]:bg-gradient-to-r data-[state=active]:from-teal-500 data-[state=active]:to-emerald-500 data-[state=active]:text-white data-[state=active]:shadow-md transition-all">
+                    <Palette className="h-4 w-4 hidden sm:block" />
+                    색상 추천
+                  </TabsTrigger>
+                  <TabsTrigger value="activities" className="gap-2 rounded-xl py-3 data-[state=active]:bg-gradient-to-r data-[state=active]:from-teal-500 data-[state=active]:to-emerald-500 data-[state=active]:text-white data-[state=active]:shadow-md transition-all">
+                    <Lightbulb className="h-4 w-4 hidden sm:block" />
+                    활동 가이드
+                  </TabsTrigger>
+                  <TabsTrigger value="centers" className="gap-2 rounded-xl py-3 data-[state=active]:bg-gradient-to-r data-[state=active]:from-teal-500 data-[state=active]:to-emerald-500 data-[state=active]:text-white data-[state=active]:shadow-md transition-all">
+                    <MapPin className="h-4 w-4 hidden sm:block" />
+                    센터 찾기
+                  </TabsTrigger>
+                </TabsList>
+              </div>
 
               {/* Therapy Methods Tab */}
-              <TabsContent value="therapy" className="space-y-6">
-                <div className="grid gap-4 md:grid-cols-3 mb-8">
+              <TabsContent value="therapy" className="space-y-8">
+                {/* Section header */}
+                <div className="text-center max-w-xl mx-auto">
+                  <h2 className="text-xl md:text-2xl font-bold text-slate-900 mb-2">감정 표현을 도와주는 치료법</h2>
+                  <p className="text-sm text-slate-400">아이에게 맞는 치료법을 선택하고 가정에서 실천해 보세요</p>
+                </div>
+
+                <div className="grid gap-5 md:grid-cols-3 mb-8">
                   {therapyMethods.map((method) => {
                     const Icon = method.icon;
+                    const isActive = selectedTherapy === method.id;
                     return (
-                      <Card
+                      <div
                         key={method.id}
-                        className={`cursor-pointer transition-all ${
-                          selectedTherapy === method.id
-                            ? "border-primary ring-2 ring-primary/20"
-                            : "hover:border-primary/50"
+                        className={`group cursor-pointer rounded-2xl border p-6 transition-all duration-300 ${
+                          isActive
+                            ? "border-teal-200 bg-gradient-to-br from-teal-50/50 to-white shadow-xl shadow-teal-100/40 -translate-y-1"
+                            : "border-slate-100 bg-white hover:border-slate-200 hover:shadow-lg hover:-translate-y-0.5"
                         }`}
                         onClick={() => setSelectedTherapy(method.id)}
                       >
-                        <CardContent className="p-6">
-                          <div className="flex items-start gap-4">
-                            <div
-                              className={`h-12 w-12 rounded-xl ${method.color} flex items-center justify-center`}
-                            >
-                              <Icon className="h-6 w-6 text-primary-foreground" />
-                            </div>
-                            <div>
-                              <h3 className="font-semibold text-foreground">
-                                {method.title}
-                              </h3>
-                              <p className="text-sm text-muted-foreground">
-                                {method.description}
-                              </p>
-                            </div>
+                        <div className="flex items-start gap-4">
+                          <div
+                            className={`h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 shadow-lg transition-transform duration-300 group-hover:scale-110 ${
+                              isActive
+                                ? "bg-gradient-to-br from-teal-400 to-emerald-500 ring-4 ring-teal-200/30"
+                                : `${method.color} ring-4 ring-slate-100`
+                            }`}
+                          >
+                            <Icon className="h-6 w-6 text-white" />
                           </div>
-                        </CardContent>
-                      </Card>
+                          <div>
+                            <h3 className={`font-bold mb-1 transition-colors ${isActive ? "text-teal-700" : "text-slate-800"}`}>
+                              {method.title}
+                            </h3>
+                            <p className="text-sm text-slate-400 leading-relaxed">
+                              {method.description}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     );
                   })}
                 </div>
@@ -3710,14 +3721,14 @@ export default function SolutionsPage() {
                 {therapyMethods.map(
                   (method) =>
                     method.id === selectedTherapy && (
-                      <Card key={method.id}>
-                        <CardHeader>
-                          <CardTitle>{method.title} 활동</CardTitle>
-                          <CardDescription>
+                      <div key={method.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                        <div className="p-6 md:p-8 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
+                          <h3 className="text-lg font-bold text-slate-900">{method.title} 활동</h3>
+                          <p className="text-sm text-slate-400 mt-1">
                             가정에서 쉽게 할 수 있는 {method.title} 활동입니다
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent>
+                          </p>
+                        </div>
+                        <div className="p-6 md:p-8">
                           <Accordion
                             type="single"
                             collapsible
@@ -3727,19 +3738,20 @@ export default function SolutionsPage() {
                               <AccordionItem
                                 key={index}
                                 value={`activity-${index}`}
+                                className="border-b border-slate-100 last:border-0"
                               >
-                                <AccordionTrigger className="hover:no-underline">
-                                  <div className="flex items-center gap-3 text-left">
-                                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                                      <span className="text-sm font-semibold text-primary">
+                                <AccordionTrigger className="hover:no-underline py-5">
+                                  <div className="flex items-center gap-4 text-left">
+                                    <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center shadow-md ring-4 ring-teal-100/30">
+                                      <span className="text-sm font-bold text-white">
                                         {index + 1}
                                       </span>
                                     </div>
                                     <div>
-                                      <p className="font-medium">
+                                      <p className="font-semibold text-slate-800">
                                         {activity.name}
                                       </p>
-                                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                      <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
                                         <Clock className="h-3 w-3" />
                                         {activity.duration}
                                       </p>
@@ -3747,22 +3759,22 @@ export default function SolutionsPage() {
                                   </div>
                                 </AccordionTrigger>
                                 <AccordionContent>
-                                  <div className="pl-11 space-y-4">
-                                    <p className="text-muted-foreground">
+                                  <div className="pl-14 space-y-4 pb-2">
+                                    <p className="text-slate-500 leading-relaxed">
                                       {activity.description}
                                     </p>
-                                    <div>
-                                      <p className="text-sm font-medium text-foreground mb-2">
+                                    <div className="bg-teal-50/50 rounded-xl p-4">
+                                      <p className="text-sm font-semibold text-teal-700 mb-3">
                                         진행 방법
                                       </p>
-                                      <ol className="space-y-2">
+                                      <ol className="space-y-2.5">
                                         {activity.steps.map(
                                           (step, stepIndex) => (
                                             <li
                                               key={stepIndex}
-                                              className="flex items-start gap-2 text-sm text-muted-foreground"
+                                              className="flex items-start gap-2.5 text-sm text-slate-600"
                                             >
-                                              <ChevronRight className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                                              <ChevronRight className="h-4 w-4 text-teal-500 shrink-0 mt-0.5" />
                                               {step}
                                             </li>
                                           ),
@@ -3774,186 +3786,194 @@ export default function SolutionsPage() {
                               </AccordionItem>
                             ))}
                           </Accordion>
-                        </CardContent>
-                      </Card>
+                        </div>
+                      </div>
                     ),
                 )}
               </TabsContent>
 
               {/* Color Recommendations Tab */}
-              <TabsContent value="colors" className="space-y-6">
+              <TabsContent value="colors" className="space-y-8">
+                <div className="text-center max-w-xl mx-auto">
+                  <h2 className="text-xl md:text-2xl font-bold text-slate-900 mb-2">감정별 색상 추천</h2>
+                  <p className="text-sm text-slate-400">색상은 아이의 감정을 표현하고 치유하는 강력한 도구입니다</p>
+                </div>
+
                 <div className="grid gap-6 md:grid-cols-2">
                   {colorRecommendations.map((rec) => (
-                    <Card key={rec.emotion}>
-                      <CardHeader>
-                        <div className="flex items-center justify-between">
-                          <CardTitle className="text-lg">
+                    <div key={rec.emotion} className="group bg-white rounded-2xl border border-slate-100 overflow-hidden hover:shadow-xl hover:shadow-slate-200/50 hover:-translate-y-0.5 transition-all duration-300">
+                      {/* Color strip */}
+                      <div className="flex h-2">
+                        {rec.colorClasses.map((colorClass, index) => (
+                          <div key={index} className={`flex-1 ${colorClass}`} />
+                        ))}
+                      </div>
+                      <div className="p-6">
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-lg font-bold text-slate-800">
                             {rec.emotion}을 느낄 때
-                          </CardTitle>
-                          <div className="flex gap-1">
+                          </h3>
+                          <div className="flex gap-1.5">
                             {rec.colorClasses.map((colorClass, index) => (
                               <div
                                 key={index}
-                                className={`h-6 w-6 rounded-full ${colorClass}`}
+                                className={`h-7 w-7 rounded-full ${colorClass} ring-2 ring-white shadow-sm`}
                               />
                             ))}
                           </div>
                         </div>
-                        <CardDescription>{rec.description}</CardDescription>
-                      </CardHeader>
-                      <CardContent>
+                        <p className="text-sm text-slate-400 mb-4 leading-relaxed">{rec.description}</p>
                         <div className="space-y-3">
-                          <p className="text-sm font-medium text-foreground">
-                            추천 색상: {rec.colors.join(", ")}
+                          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                            추천 색상: {rec.colors.join(" · ")}
                           </p>
-                          <div className="space-y-2">
-                            <p className="text-sm font-medium text-foreground">
+                          <div className="bg-slate-50 rounded-xl p-4">
+                            <p className="text-xs font-semibold text-slate-600 mb-2">
                               추천 활동
                             </p>
-                            <ul className="space-y-1">
+                            <ul className="space-y-1.5">
                               {rec.activities.map((activity, index) => (
                                 <li
                                   key={index}
-                                  className="text-sm text-muted-foreground flex items-center gap-2"
+                                  className="text-sm text-slate-500 flex items-center gap-2"
                                 >
-                                  <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                                  <div className="h-1.5 w-1.5 rounded-full bg-teal-400" />
                                   {activity}
                                 </li>
                               ))}
                             </ul>
                           </div>
                         </div>
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </div>
                   ))}
                 </div>
 
-                <Card className="bg-primary/5 border-primary/20">
-                  <CardContent className="p-6">
-                    <div className="flex gap-4">
-                      <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                        <Lightbulb className="h-6 w-6 text-primary" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-foreground mb-2">
-                          색상 활용 팁
-                        </h3>
-                        <p className="text-sm text-muted-foreground leading-relaxed">
-                          아이가 특정 색상을 거부하거나 선호한다면 그것도 중요한
-                          신호입니다. 색상 선택을 강요하지 말고, 아이가
-                          자연스럽게 선택하도록 해주세요. 시간이 지나면서
-                          선호하는 색상이 변화하는 것도 자연스러운 현상입니다.
-                        </p>
-                      </div>
+                <div className="bg-gradient-to-r from-teal-50 to-emerald-50 rounded-2xl border border-teal-100/50 p-6">
+                  <div className="flex gap-4">
+                    <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center shrink-0 shadow-lg ring-4 ring-teal-200/30">
+                      <Lightbulb className="h-6 w-6 text-white" />
                     </div>
-                  </CardContent>
-                </Card>
+                    <div>
+                      <h3 className="font-bold text-slate-800 mb-2">
+                        색상 활용 팁
+                      </h3>
+                      <p className="text-sm text-slate-500 leading-relaxed">
+                        아이가 특정 색상을 거부하거나 선호한다면 그것도 중요한
+                        신호입니다. 색상 선택을 강요하지 말고, 아이가
+                        자연스럽게 선택하도록 해주세요. 시간이 지나면서
+                        선호하는 색상이 변화하는 것도 자연스러운 현상입니다.
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </TabsContent>
 
               {/* Home Activities Tab */}
-              <TabsContent value="activities" className="space-y-6">
+              <TabsContent value="activities" className="space-y-8">
+                <div className="text-center max-w-xl mx-auto">
+                  <h2 className="text-xl md:text-2xl font-bold text-slate-900 mb-2">가정에서 할 수 있는 활동</h2>
+                  <p className="text-sm text-slate-400">아이와 함께 즐기며 정서 발달을 도울 수 있는 활동들입니다</p>
+                </div>
+
                 <div className="grid gap-6 md:grid-cols-2">
                   {homeActivities.map((activity) => (
-                    <Card key={activity.title}>
-                      <CardHeader>
-                        <div className="flex items-start justify-between">
-                          <CardTitle className="text-lg">
+                    <div key={activity.title} className="group bg-white rounded-2xl border border-slate-100 overflow-hidden hover:shadow-xl hover:shadow-slate-200/50 hover:-translate-y-0.5 transition-all duration-300">
+                      <div className="p-6">
+                        <div className="flex items-start justify-between mb-3">
+                          <h3 className="text-lg font-bold text-slate-800">
                             {activity.title}
-                          </CardTitle>
-                          <Badge
-                            variant="secondary"
-                            className="bg-primary/10 text-primary"
-                          >
+                          </h3>
+                          <span className="text-xs font-semibold bg-gradient-to-r from-teal-50 to-emerald-50 text-teal-600 px-3 py-1.5 rounded-full border border-teal-100/50 shrink-0 ml-2">
                             {activity.ageRange}
-                          </Badge>
+                          </span>
                         </div>
-                        <CardDescription>
+                        <p className="text-sm text-slate-400 mb-4 leading-relaxed">
                           {activity.description}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="flex gap-4 text-sm">
-                          <div className="flex items-center gap-1 text-muted-foreground">
-                            <Clock className="h-4 w-4" />
+                        </p>
+
+                        <div className="flex gap-3 mb-4">
+                          <span className="inline-flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg">
+                            <Clock className="h-3.5 w-3.5 text-slate-400" />
                             {activity.duration}
-                          </div>
-                          <div className="flex items-center gap-1 text-muted-foreground">
-                            <Star className="h-4 w-4" />
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg">
+                            <Star className="h-3.5 w-3.5 text-slate-400" />
                             {activity.frequency}
-                          </div>
+                          </span>
                         </div>
 
-                        <div>
-                          <p className="text-sm font-medium text-foreground mb-2">
+                        <div className="mb-4">
+                          <p className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">
                             준비물
                           </p>
                           <div className="flex flex-wrap gap-2">
                             {activity.materials.map((material, index) => (
-                              <Badge
+                              <span
                                 key={index}
-                                variant="outline"
-                                className="bg-transparent"
+                                className="text-xs bg-amber-50 text-amber-700 px-3 py-1.5 rounded-lg border border-amber-100/50"
                               >
                                 {material}
-                              </Badge>
+                              </span>
                             ))}
                           </div>
                         </div>
 
-                        <div>
-                          <p className="text-sm font-medium text-foreground mb-2">
+                        <div className="bg-teal-50/50 rounded-xl p-4">
+                          <p className="text-xs font-semibold text-teal-700 mb-2">
                             기대 효과
                           </p>
-                          <ul className="space-y-1">
+                          <ul className="space-y-1.5">
                             {activity.benefits.map((benefit, index) => (
                               <li
                                 key={index}
-                                className="text-sm text-muted-foreground flex items-center gap-2"
+                                className="text-sm text-slate-600 flex items-center gap-2"
                               >
-                                <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                                <div className="h-1.5 w-1.5 rounded-full bg-teal-400" />
                                 {benefit}
                               </li>
                             ))}
                           </ul>
                         </div>
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </div>
                   ))}
                 </div>
 
-                <Card className="bg-accent/10 border-accent/20">
-                  <CardContent className="p-6">
-                    <div className="flex gap-4">
-                      <div className="h-12 w-12 rounded-xl bg-accent/20 flex items-center justify-center shrink-0">
-                        <Users className="h-6 w-6 text-accent-foreground" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-foreground mb-2">
-                          전문가 상담이 필요하신가요?
-                        </h3>
-                        <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                          가정에서의 활동만으로 부족하다고 느껴지신다면, 전문
-                          상담소의 도움을 받아보세요. 주변의 아동 심리 상담소를
-                          찾아보실 수 있습니다.
-                        </p>
-                        <Button
-                          variant="outline"
-                          className="gap-2 bg-transparent"
-                          asChild
-                        >
-                          <a href="/counseling">
-                            주변 상담소 찾기
-                            <ChevronRight className="h-4 w-4" />
-                          </a>
-                        </Button>
-                      </div>
+                <div className="bg-gradient-to-r from-violet-50 to-purple-50 rounded-2xl border border-violet-100/50 p-6">
+                  <div className="flex gap-4">
+                    <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center shrink-0 shadow-lg ring-4 ring-violet-200/30">
+                      <Users className="h-6 w-6 text-white" />
                     </div>
-                  </CardContent>
-                </Card>
+                    <div>
+                      <h3 className="font-bold text-slate-800 mb-2">
+                        전문가 상담이 필요하신가요?
+                      </h3>
+                      <p className="text-sm text-slate-500 leading-relaxed mb-4">
+                        가정에서의 활동만으로 부족하다고 느껴지신다면, 전문
+                        상담소의 도움을 받아보세요. 주변의 아동 심리 상담소를
+                        찾아보실 수 있습니다.
+                      </p>
+                      <Button
+                        className="gap-2 rounded-full bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 shadow-lg shadow-violet-500/20"
+                        asChild
+                      >
+                        <a href="/counseling">
+                          주변 상담소 찾기
+                          <ChevronRight className="h-4 w-4" />
+                        </a>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
               </TabsContent>
 
               {/* Center Finder Tab */}
-              <TabsContent value="centers" className="space-y-6">
+              <TabsContent value="centers" className="space-y-8">
+                <div className="text-center max-w-xl mx-auto">
+                  <h2 className="text-xl md:text-2xl font-bold text-slate-900 mb-2">주변 상담센터 찾기</h2>
+                  <p className="text-sm text-slate-400">내 위치 기반으로 가까운 아동심리 상담센터를 찾아보세요</p>
+                </div>
                 <CenterFinder />
               </TabsContent>
             </Tabs>
