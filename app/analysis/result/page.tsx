@@ -1034,7 +1034,7 @@ export default function ResultPage() {
                       <p className="font-semibold text-foreground">
                         {analysisResult.overallScore > 0
                           ? drawingScores?.aggregated
-                            ? `또래 평균 50 · 대략 상위 ${Math.max(1, 100 - tScoreToPercentile(analysisResult.overallScore))}%`
+                            ? `대략 상위 ${Math.max(1, 100 - tScoreToPercentile(analysisResult.overallScore))}%`
                             : `상위 ${Math.max(1, Math.round(100 - analysisResult.overallScore))}%`
                           : "분석 중"}
                       </p>
@@ -1311,11 +1311,9 @@ export default function ResultPage() {
                       또래 비교
                     </CardTitle>
                     <CardDescription>
-                      또래 평균 50점
                       {drawingScores?.age && drawingScores?.sex
-                        ? ` (${drawingScores.age}세 ${drawingScores.sex === "남" ? "남아" : "여아"} 기준)`
-                        : ""}
-                      과 비교한 결과입니다
+                        ? `${drawingScores.age}세 ${drawingScores.sex === "남" ? "남아" : "여아"} 또래 기준으로 비교한 결과입니다`
+                        : "또래와 비교한 결과입니다"}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -1337,16 +1335,6 @@ export default function ResultPage() {
                             fill="hsl(var(--primary))"
                             radius={[0, 4, 4, 0]}
                           />
-                          <Bar
-                            dataKey="average"
-                            name={
-                              drawingScores?.age && drawingScores?.sex
-                                ? `또래 평균 (50점, ${drawingScores.age}세 ${drawingScores.sex === "남" ? "남아" : "여아"})`
-                                : "또래 평균 (50점)"
-                            }
-                            fill="hsl(var(--muted))"
-                            radius={[0, 4, 4, 0]}
-                          />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
@@ -1363,7 +1351,7 @@ export default function ResultPage() {
                       </CardTitle>
                       <CardDescription>
                         {drawingScores?.age && drawingScores?.sex
-                          ? `${drawingScores.age}세 ${drawingScores.sex === "남" ? "남아" : "여아"} 또래 기준 · 또래 평균 50점`
+                          ? `${drawingScores.age}세 ${drawingScores.sex === "남" ? "남아" : "여아"} 또래 기준`
                           : "그림 크기·위치·객체 개수 기반 또래 대비 점수"}
                       </CardDescription>
                     </CardHeader>
