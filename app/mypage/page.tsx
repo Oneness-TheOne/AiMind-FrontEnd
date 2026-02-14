@@ -292,7 +292,10 @@ export default function MyPage() {
     return trimmed;
   };
 
-  const handleViewDrawingAnalysis = async (doc: DrawingAnalysisItem) => {
+  const handleViewDrawingAnalysis = async (
+    doc: DrawingAnalysisItem,
+    options?: { autoDownload?: boolean },
+  ) => {
     const token =
       typeof window !== "undefined"
         ? localStorage.getItem("auth_token") ||
@@ -363,7 +366,10 @@ export default function MyPage() {
     } catch {
       // ignore
     }
-    router.push("/analysis/result");
+    router.push(
+      "/analysis/result" +
+        (options?.autoDownload ? "?autoDownload=1" : ""),
+    );
   };
 
   const profileImageSrc = resolveProfileImageUrl(profile.profile_image_url);
@@ -1127,6 +1133,15 @@ export default function MyPage() {
                                 handleViewDrawingAnalysis(analysis.rawDrawing!)
                             : undefined
                         }
+                        onDownload={
+                          analysis.rawDrawing
+                            ? () =>
+                                handleViewDrawingAnalysis(
+                                  analysis.rawDrawing!,
+                                  { autoDownload: true },
+                                )
+                            : undefined
+                        }
                       />
                     ))}
                   </div>
@@ -1361,12 +1376,14 @@ function AnalysisCard({
   delay = 0,
   isVisible = true,
   onView,
+  onDownload,
 }: {
   analysis: AnalysisHistory;
   showActions?: boolean;
   delay?: number;
   isVisible?: boolean;
   onView?: () => void;
+  onDownload?: () => void;
 }) {
   return (
     <div
@@ -1427,7 +1444,12 @@ function AnalysisCard({
               보기
             </Button>
           )}
-          <Button variant="ghost" size="icon" className="h-9 w-9">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9"
+            onClick={onDownload}
+          >
             <Download className="h-4 w-4" />
           </Button>
           <Button variant="ghost" size="icon" className="h-9 w-9">

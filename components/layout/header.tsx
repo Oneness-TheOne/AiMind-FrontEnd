@@ -50,8 +50,8 @@ export function Header() {
   const showTransparent = isHomePage && !isScrolled
 
   return (
-    <header 
-      className={`fixed top-0 z-50 w-full transition-all duration-300 ${
+    <header
+      className={`no-print fixed top-0 z-50 w-full transition-all duration-300 ${
         showTransparent 
           ? "bg-transparent" 
           : "bg-white border-b border-slate-200 shadow-sm"
@@ -59,7 +59,8 @@ export function Header() {
     >
       <div className="container mx-auto flex h-14 items-center justify-between px-4 lg:px-8">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-1 shrink-0">
+        <Link href="/" className="flex items-center gap-2 shrink-0">
+          <img src="/aimind.png" alt="아이마음" className="h-7 w-7 object-contain" />
           <span className={`text-xl font-bold ${showTransparent ? "text-primary" : "text-primary"}`}>
             아이마음
           </span>
@@ -125,7 +126,8 @@ export function Header() {
           </SheetTrigger>
           <SheetContent side="right" className="w-[280px] sm:w-[320px]">
             <div className="flex flex-col gap-4 pt-6">
-              <Link href="/" onClick={() => setIsOpen(false)} className="flex items-center gap-1 px-4 mb-2">
+              <Link href="/" onClick={() => setIsOpen(false)} className="flex items-center gap-2 px-4 mb-2">
+                <img src="/aimind.png" alt="아이마음" className="h-6 w-6 object-contain" />
                 <span className="text-lg font-bold text-primary">아이마음</span>
                 <span className="text-lg font-bold text-foreground">센터</span>
               </Link>

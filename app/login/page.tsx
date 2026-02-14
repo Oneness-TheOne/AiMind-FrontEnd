@@ -83,8 +83,8 @@ export default function LoginPage() {
               href="/"
               className="inline-flex items-center gap-2.5 justify-center"
             >
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary">
-                <img src="/moms-smile.svg" alt="아이마음" className="h-6 w-6" />
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary overflow-hidden">
+                <img src="/aimind.png" alt="아이마음" className="h-7 w-7 object-contain" />
               </div>
               <span className="text-2xl font-bold text-foreground">
                 아이마음

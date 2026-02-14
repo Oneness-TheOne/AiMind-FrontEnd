@@ -2,24 +2,13 @@ import Link from "next/link"
 
 export function Footer() {
   return (
-    <footer className="bg-slate-50 border-t border-slate-100">
+    <footer className="no-print bg-slate-50 border-t border-slate-100">
       <div className="container mx-auto px-4 lg:px-8 py-12 lg:py-16">
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-4">
             <Link href="/" className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  className="h-4 w-4 text-primary-foreground"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" />
-                  <path d="M9 9h.01" />
-                  <path d="M15 9h.01" />
-                  <path d="M8 13c1.5 2 3 3 4 3s2.5-1 4-3" />
-                </svg>
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary overflow-hidden shrink-0">
+                <img src="/aimind.png" alt="아이마음" className="h-5 w-5 object-contain" />
               </div>
               <span className="text-lg font-bold text-foreground">아이마음</span>
             </Link>

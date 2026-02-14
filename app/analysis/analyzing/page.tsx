@@ -136,6 +136,12 @@ export default function AnalyzingPage() {
           man: data?.results?.man?.box_image_base64 || null,
           woman: data?.results?.woman?.box_image_base64 || null,
         }
+        try {
+          sessionStorage.setItem(
+            "analysisBoxImages",
+            JSON.stringify(globalStore.__analysisBoxImages),
+          )
+        } catch (_) {}
 
         const storageData = JSON.parse(JSON.stringify(data))
         if (storageData?.results) {

@@ -1,7 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { Check, Lock, Calendar, Smartphone } from "lucide-react"
+import { Check, Lock, Calendar } from "lucide-react"
 import Link from "next/link"
 
 const features = [
@@ -68,8 +68,8 @@ export function DailyTipSection() {
                 <div className="relative w-44 md:w-52 -ml-8 z-10">
                   <div className="bg-gradient-to-br from-teal-400 to-teal-500 rounded-[2rem] p-2 shadow-xl">
                     <div className="bg-gradient-to-br from-teal-300 to-teal-400 rounded-[1.5rem] p-6 min-h-[280px] flex flex-col items-center justify-center">
-                      <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center mb-3">
-                        <Smartphone className="w-6 h-6 text-white" />
+                      <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center mb-3 overflow-hidden">
+                        <img src="/aimind.png" alt="아이마음" className="w-7 h-7 object-contain" />
                       </div>
                       <span className="text-white font-medium text-sm">아이마음</span>
                     </div>

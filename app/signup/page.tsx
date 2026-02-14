@@ -108,19 +108,8 @@ export default function SignupPage() {
           {/* Logo */}
           <div className="text-center space-y-2">
             <Link href="/" className="inline-flex items-center gap-2 justify-center">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  className="h-6 w-6 text-primary-foreground"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" />
-                  <path d="M9 9h.01" />
-                  <path d="M15 9h.01" />
-                  <path d="M8 13c1.5 2 3 3 4 3s2.5-1 4-3" />
-                </svg>
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary overflow-hidden">
+                <img src="/aimind.png" alt="아이마음" className="h-6 w-6 object-contain" />
               </div>
               <span className="text-2xl font-semibold text-foreground">아이마음</span>
             </Link>

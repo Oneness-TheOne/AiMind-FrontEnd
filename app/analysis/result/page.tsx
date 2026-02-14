@@ -2,9 +2,10 @@
 
 import React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import html2canvas from "html2canvas";
-import { jsPDF } from "jspdf";
 import Link from "next/link";
+import { useSearchParams, useRouter } from "next/navigation";
+import html2canvas from "html2canvas-pro";
+import { jsPDF } from "jspdf";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { Button } from "@/components/ui/button";
@@ -52,7 +53,6 @@ import {
   Tooltip,
   Legend,
 } from "recharts";
-
 const OBJECT_KEYS = ["tree", "house", "man", "woman"] as const;
 const OBJECT_LABELS: Record<string, string> = {
   tree: "나무",
@@ -60,6 +60,71 @@ const OBJECT_LABELS: Record<string, string> = {
   man: "남자사람",
   woman: "여자사람",
 };
+
+/** URL을 API 프록시로 가져와 base64 data URL로 변환 (PDF용, CORS 회피) */
+async function urlToDataUrlForPdf(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(`/api/image-proxy?url=${encodeURIComponent(url)}`, {
+      credentials: "include",
+    });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise<string | null>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+/** 캡처 영역 내 img의 src를 data URL로 변환해 html2canvas에서 이미지가 보이도록 함 */
+async function resolveImagesToDataUrls(container: HTMLElement): Promise<void> {
+  const imgs = container.querySelectorAll<HTMLImageElement>("img");
+  await Promise.all(
+    Array.from(imgs).map((img) => {
+      const src = img.getAttribute("src");
+      if (!src || src.startsWith("data:")) return Promise.resolve();
+      if (src.startsWith("blob:")) {
+        return fetch(src)
+          .then((r) => r.blob())
+          .then(
+            (blob) =>
+              new Promise<string>((resol, rej) => {
+                const r = new FileReader();
+                r.onload = () => resol(r.result as string);
+                r.onerror = () => rej(r.error);
+                r.readAsDataURL(blob);
+              }),
+          )
+          .then((dataUrl) => {
+            img.src = dataUrl;
+            return new Promise<void>((resol) => {
+              img.onload = () => resol();
+              img.onerror = () => resol();
+              if (img.complete) resol();
+            });
+          })
+          .catch(() => {});
+      }
+      if (src.startsWith("http://") || src.startsWith("https://")) {
+        return urlToDataUrlForPdf(src).then((dataUrl) => {
+          if (dataUrl) {
+            img.src = dataUrl;
+            return new Promise<void>((resol) => {
+              img.onload = () => resol();
+              img.onerror = () => resol();
+              if (img.complete) resol();
+            });
+          }
+        });
+      }
+      return Promise.resolve();
+    }),
+  );
+}
 
 /** "OO 아동", "OO 군" 등에서 호칭 접미사 제거 후 이름만 반환 */
 function cleanChildName(fullName: string): string {
@@ -128,14 +193,8 @@ function replaceFullNameWithCallNameInSummary(
   if (!full || full === "아이") return text;
   const escaped = escapeRegex(full);
   let s = text;
-  s = s.replace(
-    new RegExp(escaped + "\\s*아동의\\s*", "g"),
-    suffix + " ",
-  );
-  s = s.replace(
-    new RegExp(escaped + "\\s*아동은", "g"),
-    suffix + " 그림에서",
-  );
+  s = s.replace(new RegExp(escaped + "\\s*아동의\\s*", "g"), suffix + " ");
+  s = s.replace(new RegExp(escaped + "\\s*아동은", "g"), suffix + " 그림에서");
   return s;
 }
 
@@ -346,6 +405,18 @@ const RECOMMENDATION_CATEGORY_LABELS: Record<string, string> = {
   analysis_based: "분석 기반 추천",
 };
 
+function getRecommendationCategoryLabel(category: string): string {
+  if (!category || typeof category !== "string") return category;
+  const key = category.trim().toLowerCase();
+  const exact = RECOMMENDATION_CATEGORY_LABELS[category];
+  if (exact) return exact;
+  const byLower = Object.entries(RECOMMENDATION_CATEGORY_LABELS).find(
+    ([k]) => k.toLowerCase() === key,
+  );
+  if (byLower) return byLower[1];
+  return category;
+}
+
 const recommendations = [
   {
     category: "가정 활동",
@@ -436,40 +507,185 @@ export default function ResultPage() {
   } | null>(null);
 
   const [isSavingPdf, setIsSavingPdf] = useState(false);
+  const [isPdfCaptureView, setIsPdfCaptureView] = useState(false);
   const pdfContentRef = useRef<HTMLDivElement>(null);
+  const autoDownloadTriggeredRef = useRef(false);
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
+  /** 화면과 동일한 PDF — html2canvas로 결과 영역 캡처 후 jsPDF로 저장 */
   const handleSavePdf = async () => {
     const el = pdfContentRef.current;
     if (!el) return;
     setIsSavingPdf(true);
+    let prevTabStyles: {
+      el: HTMLElement;
+      display: string;
+      visibility: string;
+      height: string;
+    }[] = [];
+    let tabsRoot: HTMLElement | null = null;
+    let prevPadding: { left: string; right: string } = { left: "", right: "" };
     try {
-      const canvas = await html2canvas(el, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: "#f8fafc",
+      setIsPdfCaptureView(true);
+      document.body.classList.add("pdf-capture");
+      await new Promise((r) => requestAnimationFrame(r));
+      await new Promise((r) => requestAnimationFrame(r));
+      await new Promise((r) => setTimeout(r, 400));
+      const tabContents = el.querySelectorAll<HTMLElement>(
+        '[data-slot="tabs-content"]',
+      );
+      prevTabStyles = [];
+      tabContents.forEach((node) => {
+        prevTabStyles.push({
+          el: node,
+          display: node.style.display,
+          visibility: node.style.visibility,
+          height: node.style.height,
+        });
+        node.style.setProperty("display", "block", "important");
+        node.style.setProperty("visibility", "visible", "important");
+        node.style.setProperty("height", "auto", "important");
       });
-      const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-      const pdfW = pdf.internal.pageSize.getWidth();
-      const pdfH = pdf.internal.pageSize.getHeight();
-      const imgW = pdfW;
-      const imgH = (canvas.height * pdfW) / canvas.width;
-      const totalPages = Math.ceil(imgH / pdfH) || 1;
-      pdf.addImage(imgData, "PNG", 0, 0, imgW, imgH);
-      for (let p = 1; p < totalPages; p++) {
-        pdf.addPage();
-        pdf.addImage(imgData, "PNG", 0, -(imgH - p * pdfH), imgW, imgH);
+      tabsRoot = el.querySelector<HTMLElement>('[data-slot="tabs"]');
+      if (tabsRoot) {
+        tabsRoot.style.setProperty("overflow", "visible", "important");
       }
-      const safeName = (analysisResult.childName || "분석").replace(/\s+/g, "_").slice(0, 20);
-      const date = new Date().toISOString().slice(0, 10);
-      pdf.save(`아이마음_분석결과_${safeName}_${date}.pdf`);
+      await new Promise((r) => setTimeout(r, 200));
+      await resolveImagesToDataUrls(el);
+      await new Promise((r) => setTimeout(r, 100));
+
+      prevPadding.left = el.style.paddingLeft;
+      prevPadding.right = el.style.paddingRight;
+      el.style.setProperty("padding-left", "15rem", "important");
+      el.style.setProperty("padding-right", "15rem", "important");
+      await new Promise((r) => requestAnimationFrame(r));
+
+      const pdfScale = 1.2;
+      const canvas = await html2canvas(el, {
+        useCORS: true,
+        allowTaint: true,
+        scale: pdfScale,
+        logging: false,
+      });
+
+      const containerRect = el.getBoundingClientRect();
+      const breakEls = el.querySelectorAll<HTMLElement>('[data-slot="card"]');
+      const breakBottoms: number[] = [0];
+      breakEls.forEach((card) => {
+        const r = card.getBoundingClientRect();
+        const bottom = (r.bottom - containerRect.top) * pdfScale;
+        breakBottoms.push(bottom);
+      });
+      const breakPositions = [...new Set(breakBottoms)].sort((a, b) => a - b);
+
+      prevTabStyles.forEach(({ el: node, display, visibility, height }) => {
+        node.style.removeProperty("display");
+        node.style.removeProperty("visibility");
+        node.style.removeProperty("height");
+        if (display) node.style.display = display;
+        if (visibility) node.style.visibility = visibility;
+        if (height) node.style.height = height;
+      });
+      if (tabsRoot) tabsRoot.style.removeProperty("overflow");
+      el.style.removeProperty("padding-left");
+      el.style.removeProperty("padding-right");
+      if (prevPadding.left) el.style.paddingLeft = prevPadding.left;
+      if (prevPadding.right) el.style.paddingRight = prevPadding.right;
+      document.body.classList.remove("pdf-capture");
+      setIsPdfCaptureView(false);
+
+      const imgW = canvas.width;
+      const imgH = canvas.height;
+      const contentEndY =
+        breakPositions.length > 0
+          ? Math.min(imgH, Math.max(...breakPositions) + 1)
+          : imgH;
+      const pdfW = 210;
+      const pdfH = 297;
+      const margin = 10;
+      const w = pdfW - margin * 2;
+      const scale = w / imgW;
+      const pageH = (pdfH - margin * 2) / scale;
+      const doc = new jsPDF({ unit: "mm", format: "a4" });
+
+      const MIN_SLICE_PX = 40;
+      const isTrailingSliceToSkip = (fromY: number) => {
+        const remaining = contentEndY - fromY;
+        return remaining < MIN_SLICE_PX || remaining < pageH * 0.2;
+      };
+      let currentY = 0;
+      let drawnPageCount = 0;
+      while (currentY < contentEndY) {
+        const pageEndY = Math.min(currentY + pageH, contentEndY);
+        const candidates = breakPositions.filter(
+          (b) => b > currentY && b <= pageEndY,
+        );
+        const endY = candidates.length > 0 ? Math.max(...candidates) : pageEndY;
+        const sh = Math.min(endY - currentY, contentEndY - currentY);
+        if (sh <= 0) {
+          currentY = pageEndY;
+          continue;
+        }
+        if (drawnPageCount > 0 && isTrailingSliceToSkip(currentY)) {
+          currentY = contentEndY;
+          break;
+        }
+        if (drawnPageCount > 0) doc.addPage();
+        drawnPageCount += 1;
+        const sliceCanvas = document.createElement("canvas");
+        sliceCanvas.width = imgW;
+        sliceCanvas.height = Math.ceil(sh);
+        const ctx = sliceCanvas.getContext("2d");
+        if (ctx) {
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, imgW, sliceCanvas.height);
+          ctx.drawImage(canvas, 0, currentY, imgW, sh, 0, 0, imgW, sh);
+        }
+        const imgData = sliceCanvas.toDataURL("image/jpeg", 0.92);
+        doc.addImage(imgData, "JPEG", margin, margin, w, sh * scale);
+        currentY = endY;
+      }
+      const safeName = (analysisResult.childName || "분석")
+        .replace(/\s+/g, "_")
+        .slice(0, 20);
+      const dateStr = new Date().toISOString().slice(0, 10);
+      doc.save(`아이마음_분석결과_${safeName}_${dateStr}.pdf`);
     } catch (e) {
       console.error("PDF 저장 실패:", e);
+      prevTabStyles.forEach(({ el: node, display, visibility, height }) => {
+        node.style.removeProperty("display");
+        node.style.removeProperty("visibility");
+        node.style.removeProperty("height");
+        if (display) node.style.display = display;
+        if (visibility) node.style.visibility = visibility;
+        if (height) node.style.height = height;
+      });
+      if (tabsRoot) tabsRoot.style.removeProperty("overflow");
+      if (el) {
+        el.style.removeProperty("padding-left");
+        el.style.removeProperty("padding-right");
+        if (prevPadding.left) el.style.paddingLeft = prevPadding.left;
+        if (prevPadding.right) el.style.paddingRight = prevPadding.right;
+      }
+      document.body.classList.remove("pdf-capture");
+      setIsPdfCaptureView(false);
     } finally {
       setIsSavingPdf(false);
     }
   };
+
+  useEffect(() => {
+    if (autoDownloadTriggeredRef.current) return;
+    if (searchParams.get("autoDownload") !== "1") return;
+    const hasData =
+      Object.keys(interpretations).length > 0 ||
+      Object.values(boxImages).some(Boolean);
+    if (!hasData) return;
+    autoDownloadTriggeredRef.current = true;
+    handleSavePdf();
+    router.replace("/analysis/result");
+  }, [searchParams, interpretations, boxImages, router]);
 
   const formatInterpretationKey = (value: string) => value.replace(/_/g, " ");
 
@@ -702,13 +918,33 @@ export default function ResultPage() {
       } else {
         setApiRecommendations([]);
       }
+      let storedBoxImages: Record<string, string | null> | null = null;
+      try {
+        const raw = sessionStorage.getItem("analysisBoxImages");
+        if (raw)
+          storedBoxImages = JSON.parse(raw) as Record<string, string | null>;
+      } catch {}
       setBoxImages({
-        tree: memoryBoxImages?.tree || results.tree?.box_image_base64 || null,
+        tree:
+          memoryBoxImages?.tree ??
+          results.tree?.box_image_base64 ??
+          storedBoxImages?.tree ??
+          null,
         house:
-          memoryBoxImages?.house || results.house?.box_image_base64 || null,
-        man: memoryBoxImages?.man || results.man?.box_image_base64 || null,
+          memoryBoxImages?.house ??
+          results.house?.box_image_base64 ??
+          storedBoxImages?.house ??
+          null,
+        man:
+          memoryBoxImages?.man ??
+          results.man?.box_image_base64 ??
+          storedBoxImages?.man ??
+          null,
         woman:
-          memoryBoxImages?.woman || results.woman?.box_image_base64 || null,
+          memoryBoxImages?.woman ??
+          results.woman?.box_image_base64 ??
+          storedBoxImages?.woman ??
+          null,
       });
 
       // T-Score 기반 drawing_scores (drawing_norm_dist_stats) 우선 사용
@@ -858,7 +1094,8 @@ export default function ResultPage() {
             {
               name: "위치 안정성",
               child: ds.aggregated.위치_안정성_점수,
-              average: peerT?.위치_안정성_점수 ?? ds.peer_average ?? PEER_AVERAGE,
+              average:
+                peerT?.위치_안정성_점수 ?? ds.peer_average ?? PEER_AVERAGE,
             },
             {
               name: "표현력",
@@ -954,8 +1191,31 @@ export default function ResultPage() {
     [boxImages],
   );
 
+  const allComponentElementsByKey = useMemo(
+    () =>
+      OBJECT_KEYS.map((key) => ({
+        key,
+        label: OBJECT_LABELS[key] ?? key,
+        elements: getComponentElementsFromImageJson(
+          interpretations[key]?.image_json as
+            | Record<string, unknown>
+            | undefined,
+          key,
+        ),
+      })),
+    [interpretations],
+  );
+
   return (
     <div className="flex min-h-screen flex-col">
+      {isSavingPdf && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-background opacity-100">
+          <div className="flex flex-col items-center gap-3">
+            <div className="h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            <p className="text-sm text-muted-foreground">PDF 생성 중 입니다.</p>
+          </div>
+        </div>
+      )}
       <Header />
       <main className="flex-1 bg-gradient-to-b from-secondary/30 to-background">
         <div ref={pdfContentRef} className="container mx-auto px-4 py-8">
@@ -983,7 +1243,8 @@ export default function ResultPage() {
                   )}
                 </div>
                 <h1 className="text-2xl md:text-3xl font-bold text-foreground">
-                  {toDisplayNameWithSuffix(analysisResult.childName)} 그림 분석 결과
+                  {toDisplayNameWithSuffix(analysisResult.childName)} 그림 분석
+                  결과
                 </h1>
                 <p className="text-muted-foreground mt-1">
                   {toCallName(analysisResult.childName)}
@@ -994,7 +1255,7 @@ export default function ResultPage() {
                       : ""}
                 </p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 pdf-hide-on-capture">
                 <Button
                   variant="outline"
                   size="sm"
@@ -1160,148 +1421,313 @@ export default function ResultPage() {
               </TabsTrigger>
             </TabsList>
 
-            {/* Basic Analysis Tab */}
-            <TabsContent value="basic" className="space-y-6">
+            {/* Basic Analysis Tab - PDF 캡처 시: 시각적+구성요소 4쌍, 일반 시: 기존 2카드 */}
+            <TabsContent
+              value="basic"
+              forceMount
+              className="space-y-6 data-[state=inactive]:hidden data-[state=inactive]:absolute data-[state=inactive]:pointer-events-none"
+            >
+              {isPdfCaptureView && (
+                <div className="pb-3 mb-4 border-b border-border">
+                  <h2 className="text-xl font-semibold text-foreground">
+                    기본 분석
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    시각적 분석 · 구성요소 분석
+                  </p>
+                </div>
+              )}
               <div className="grid gap-6 lg:grid-cols-2">
-                {/* Drawing with Overlay */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Eye className="h-5 w-5 text-primary" />
-                      시각적 분석
-                    </CardTitle>
-                    <CardDescription>
-                      AI가 감지한 요소들이 하이라이트 되어 있습니다
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      <div className="relative aspect-square bg-muted rounded-xl overflow-hidden">
-                        <div className="absolute inset-0 flex items-center justify-center p-4">
-                          {analysisImages[activeImageIndex]?.preview ? (
-                            <img
-                              src={
-                                analysisImages[activeImageIndex].preview ||
-                                "/placeholder.svg"
-                              }
-                              alt={`${analysisImages[activeImageIndex].label} 분석 결과`}
-                              className="h-full w-full rounded-lg border object-cover"
-                            />
+                {isPdfCaptureView ? (
+                  <div className="lg:col-span-2 space-y-8">
+                    {analysisImages.map((item, idx) => {
+                      const { elements } = allComponentElementsByKey[idx];
+                      return (
+                        <div
+                          key={item.label}
+                          className="grid gap-6 lg:grid-cols-2"
+                        >
+                          <Card className="overflow-hidden">
+                            <CardHeader>
+                              <CardTitle className="flex items-center gap-2">
+                                <Eye className="h-5 w-5 text-primary" />
+                                시각적 분석 · {item.label}
+                              </CardTitle>
+                              <CardDescription>
+                                AI가 감지한 요소들이 하이라이트 되어 있습니다
+                              </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="relative aspect-square bg-muted rounded-xl overflow-hidden">
+                                <div className="absolute inset-0 flex items-center justify-center p-4">
+                                  {item.preview ? (
+                                    <img
+                                      src={item.preview}
+                                      alt={`${item.label} 분석 결과`}
+                                      className="h-full w-full rounded-lg border object-cover"
+                                      crossOrigin="anonymous"
+                                    />
+                                  ) : (
+                                    <div className="text-sm text-muted-foreground">
+                                      이미지가 없습니다.
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                          <Card>
+                            <CardHeader>
+                              <CardTitle>
+                                구성요소 분석 · {item.label}
+                              </CardTitle>
+                              <CardDescription>
+                                {item.label}에서 감지된 요소들과 특징입니다
+                              </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="space-y-2">
+                                {elements.length > 0 ? (
+                                  elements.map((element) => (
+                                    <div
+                                      key={element.name}
+                                      className={`flex items-center gap-3 p-3 rounded-lg ${
+                                        element.detected
+                                          ? "bg-primary/5"
+                                          : "bg-muted/50"
+                                      }`}
+                                    >
+                                      <div
+                                        className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${
+                                          element.detected
+                                            ? "bg-primary/10 text-primary"
+                                            : "bg-muted text-muted-foreground"
+                                        }`}
+                                      >
+                                        {element.name.includes("집") && (
+                                          <Home className="h-4 w-4" />
+                                        )}
+                                        {element.name.includes("나무") && (
+                                          <TreeDeciduous className="h-4 w-4" />
+                                        )}
+                                        {element.name.includes("사람") && (
+                                          <User className="h-4 w-4" />
+                                        )}
+                                        {element.name.includes("태양") && (
+                                          <span className="text-sm">☀</span>
+                                        )}
+                                        {element.name.includes("구름") && (
+                                          <span className="text-sm">☁</span>
+                                        )}
+                                        {element.name.includes("꽃") && (
+                                          <span className="text-sm">🌱</span>
+                                        )}
+                                        {element.name.includes("머리") ||
+                                        element.name.includes("얼굴") ? (
+                                          <User className="h-4 w-4" />
+                                        ) : (
+                                          <Layers className="h-4 w-4" />
+                                        )}
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-medium text-foreground">
+                                            {element.name}
+                                          </span>
+                                          <Badge
+                                            variant={
+                                              element.detected
+                                                ? "default"
+                                                : "secondary"
+                                            }
+                                            className={
+                                              element.detected
+                                                ? "bg-primary"
+                                                : ""
+                                            }
+                                          >
+                                            {element.detected
+                                              ? "감지됨"
+                                              : "미감지"}
+                                          </Badge>
+                                        </div>
+                                        <p className="text-sm text-muted-foreground">
+                                          {element.note}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <p className="text-xs text-muted-foreground py-2">
+                                    감지된 구성요소 없음
+                                  </p>
+                                )}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <>
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Eye className="h-5 w-5 text-primary" />
+                          시각적 분석
+                        </CardTitle>
+                        <CardDescription>
+                          AI가 감지한 요소들이 하이라이트 되어 있습니다
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          <div className="relative aspect-square bg-muted rounded-xl overflow-hidden">
+                            <div className="absolute inset-0 flex items-center justify-center p-4">
+                              {analysisImages[activeImageIndex]?.preview ? (
+                                <img
+                                  src={
+                                    analysisImages[activeImageIndex].preview ||
+                                    "/placeholder.svg"
+                                  }
+                                  alt={`${analysisImages[activeImageIndex].label} 분석 결과`}
+                                  className="h-full w-full rounded-lg border object-cover"
+                                />
+                              ) : (
+                                <div className="text-sm text-muted-foreground">
+                                  이미지가 없습니다.
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {analysisImages.map((item, index) => (
+                              <button
+                                key={item.label}
+                                type="button"
+                                onClick={() => setActiveImageIndex(index)}
+                                className="focus-visible:outline-none"
+                              >
+                                <Badge
+                                  variant="secondary"
+                                  className={`${item.badgeClass} ${activeImageIndex === index ? "ring-2 ring-primary/60" : ""}`}
+                                >
+                                  {item.label}
+                                </Badge>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>구성요소 분석</CardTitle>
+                        <CardDescription>
+                          {analysisImages[activeImageIndex]?.label || "그림"}
+                          에서 감지된 요소들과 특징입니다
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          {componentElements.length > 0 ? (
+                            componentElements.map((element) => (
+                              <div
+                                key={element.name}
+                                className={`flex items-center gap-3 p-3 rounded-lg ${
+                                  element.detected
+                                    ? "bg-primary/5"
+                                    : "bg-muted/50"
+                                }`}
+                              >
+                                <div
+                                  className={`h-8 w-8 rounded-full flex items-center justify-center ${
+                                    element.detected
+                                      ? "bg-primary/10 text-primary"
+                                      : "bg-muted text-muted-foreground"
+                                  }`}
+                                >
+                                  {element.name.includes("집") && (
+                                    <Home className="h-4 w-4" />
+                                  )}
+                                  {element.name.includes("나무") && (
+                                    <TreeDeciduous className="h-4 w-4" />
+                                  )}
+                                  {element.name.includes("사람") && (
+                                    <User className="h-4 w-4" />
+                                  )}
+                                  {element.name.includes("태양") && (
+                                    <span className="text-sm">☀</span>
+                                  )}
+                                  {element.name.includes("구름") && (
+                                    <span className="text-sm">☁</span>
+                                  )}
+                                  {element.name.includes("꽃") && (
+                                    <span className="text-sm">🌱</span>
+                                  )}
+                                  {element.name.includes("머리") ||
+                                  element.name.includes("얼굴") ? (
+                                    <User className="h-4 w-4" />
+                                  ) : (
+                                    <Layers className="h-4 w-4" />
+                                  )}
+                                </div>
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium text-foreground">
+                                      {element.name}
+                                    </span>
+                                    <Badge
+                                      variant={
+                                        element.detected
+                                          ? "default"
+                                          : "secondary"
+                                      }
+                                      className={
+                                        element.detected ? "bg-primary" : ""
+                                      }
+                                    >
+                                      {element.detected ? "감지됨" : "미감지"}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-sm text-muted-foreground">
+                                    {element.note}
+                                  </p>
+                                </div>
+                              </div>
+                            ))
                           ) : (
-                            <div className="text-sm text-muted-foreground">
-                              이미지가 없습니다.
+                            <div className="text-center py-8 text-muted-foreground text-sm">
+                              시각적 분석에서 나무·집·남자·여자 중 하나를
+                              선택하면 해당 그림의 구성요소가 표시됩니다.
                             </div>
                           )}
                         </div>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {analysisImages.map((item, index) => (
-                          <button
-                            key={item.label}
-                            type="button"
-                            onClick={() => setActiveImageIndex(index)}
-                            className="focus-visible:outline-none"
-                          >
-                            <Badge
-                              variant="secondary"
-                              className={`${item.badgeClass} ${activeImageIndex === index ? "ring-2 ring-primary/60" : ""}`}
-                            >
-                              {item.label}
-                            </Badge>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Detected Elements - 선택한 이미지(tree/집/남자/여자)에 따라 동적 표시 */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>구성요소 분석</CardTitle>
-                    <CardDescription>
-                      {analysisImages[activeImageIndex]?.label || "그림"}에서
-                      감지된 요소들과 특징입니다
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {componentElements.length > 0 ? (
-                        componentElements.map((element) => (
-                          <div
-                            key={element.name}
-                            className={`flex items-center gap-3 p-3 rounded-lg ${
-                              element.detected ? "bg-primary/5" : "bg-muted/50"
-                            }`}
-                          >
-                            <div
-                              className={`h-8 w-8 rounded-full flex items-center justify-center ${
-                                element.detected
-                                  ? "bg-primary/10 text-primary"
-                                  : "bg-muted text-muted-foreground"
-                              }`}
-                            >
-                              {element.name.includes("집") && (
-                                <Home className="h-4 w-4" />
-                              )}
-                              {element.name.includes("나무") && (
-                                <TreeDeciduous className="h-4 w-4" />
-                              )}
-                              {element.name.includes("사람") && (
-                                <User className="h-4 w-4" />
-                              )}
-                              {element.name.includes("태양") && (
-                                <span className="text-sm">☀</span>
-                              )}
-                              {element.name.includes("구름") && (
-                                <span className="text-sm">☁</span>
-                              )}
-                              {element.name.includes("꽃") && (
-                                <span className="text-sm">🌱</span>
-                              )}
-                              {element.name.includes("머리") ||
-                              element.name.includes("얼굴") ? (
-                                <User className="h-4 w-4" />
-                              ) : (
-                                <Layers className="h-4 w-4" />
-                              )}
-                            </div>
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium text-foreground">
-                                  {element.name}
-                                </span>
-                                <Badge
-                                  variant={
-                                    element.detected ? "default" : "secondary"
-                                  }
-                                  className={
-                                    element.detected ? "bg-primary" : ""
-                                  }
-                                >
-                                  {element.detected ? "감지됨" : "미감지"}
-                                </Badge>
-                              </div>
-                              <p className="text-sm text-muted-foreground">
-                                {element.note}
-                              </p>
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="text-center py-8 text-muted-foreground text-sm">
-                          시각적 분석에서 나무·집·남자·여자 중 하나를 선택하면
-                          해당 그림의 구성요소가 표시됩니다.
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
+                      </CardContent>
+                    </Card>
+                  </>
+                )}
               </div>
             </TabsContent>
 
             {/* Development Comparison Tab */}
-            <TabsContent value="development" className="space-y-6">
+            <TabsContent
+              value="development"
+              forceMount
+              className="space-y-6 data-[state=inactive]:hidden data-[state=inactive]:absolute data-[state=inactive]:pointer-events-none"
+            >
+              {isPdfCaptureView && (
+                <div className="pb-3 mb-4 border-b border-border">
+                  <h2 className="text-xl font-semibold text-foreground">
+                    발달 비교
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    또래 비교 · 발달 단계 및 T-Score 해석
+                  </p>
+                </div>
+              )}
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                 {/* Peer Comparison Bar Chart */}
                 <Card className="min-w-0">
@@ -1427,96 +1853,297 @@ export default function ResultPage() {
             </TabsContent>
 
             {/* Psychology Interpretation Tab */}
-            <TabsContent value="psychology" className="space-y-6">
-              {(() => {
-                const activeInterpretation =
-                  interpretations[activeInterpretTab]?.interpretation || null;
-                const summary = activeInterpretation?.["전체_요약"];
-                const perDrawingSummary =
-                  (typeof summary?.내용 === "string" && summary.내용.trim()
-                    ? summary.내용
-                    : typeof summary === "string" && summary.trim()
-                      ? summary
-                      : null) ??
-                  (typeof activeInterpretation?.인상적_해석 === "string" &&
-                  activeInterpretation.인상적_해석.trim()
-                    ? activeInterpretation.인상적_해석
-                    : null);
-                const summaryContent = replaceSummaryForDisplay(
-                  perDrawingSummary ?? "해석 요약이 아직 준비되지 않았습니다.",
-                  analysisResult.childName,
-                );
-                return (
-                  <>
-                    {/* Summary Banner: 현재 탭(나무/집/남자/여자)에 대한 요약 */}
-                    <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent rounded-2xl p-6 border border-primary/20">
-                      <div className="flex items-start gap-4">
-                        <div className="h-12 w-12 rounded-xl bg-primary/20 flex items-center justify-center shrink-0">
-                          <Brain className="h-6 w-6 text-primary" />
+            <TabsContent
+              value="psychology"
+              forceMount
+              className={`data-[state=inactive]:hidden data-[state=inactive]:absolute data-[state=inactive]:pointer-events-none ${isPdfCaptureView ? "space-y-3" : "space-y-4"}`}
+            >
+              {isPdfCaptureView && (
+                <div className="pb-3 mb-4 border-b border-border">
+                  <h2 className="text-xl font-semibold text-foreground">
+                    심리 해석
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    그림별 심리 해석 및 해석 요약
+                  </p>
+                </div>
+              )}
+
+              {/* PDF 캡처 시: 나무·집·남자·여자 4개 블록 모두 표시 */}
+              {isPdfCaptureView ? (
+                <div className="space-y-6">
+                  {OBJECT_KEYS.map((key) => {
+                    const value = interpretations[key];
+                    const interpretation = value?.interpretation || {};
+                    const summary = interpretation["전체_요약"];
+                    const perDrawingSummary =
+                      (typeof summary?.내용 === "string" && summary.내용.trim()
+                        ? summary.내용
+                        : typeof summary === "string" && summary.trim()
+                          ? summary
+                          : null) ??
+                      (typeof interpretation.인상적_해석 === "string" &&
+                      interpretation.인상적_해석.trim()
+                        ? interpretation.인상적_해석
+                        : null);
+                    const summaryContent = replaceSummaryForDisplay(
+                      perDrawingSummary ??
+                        "해석 요약이 아직 준비되지 않았습니다.",
+                      analysisResult.childName,
+                    );
+                    const paperSectionOrder = [
+                      "인상적_해석",
+                      "구조적_해석",
+                      "표상적_해석",
+                      "정서_영역_소견",
+                    ];
+                    const sectionOrder = [
+                      "전체_요약",
+                      ...paperSectionOrder,
+                      "구성_분석",
+                      "구성요소_분석",
+                      "집_구성요소_분석",
+                      "부가요소_분석",
+                      "주변요소_분석",
+                      "자연요소_분석",
+                      "하늘_요소_분석",
+                      "얼굴_분석",
+                      "신체_분석",
+                      "의류_분석",
+                      "발달_평가",
+                      "종합_해석",
+                    ];
+                    const orderedEntries = [
+                      ...sectionOrder
+                        .filter((sectionKey) => sectionKey in interpretation)
+                        .map(
+                          (sectionKey) =>
+                            [
+                              sectionKey,
+                              interpretation[sectionKey],
+                            ] as const,
+                        ),
+                      ...Object.entries(interpretation).filter(
+                        ([sectionKey]) =>
+                          !sectionOrder.includes(sectionKey) &&
+                          sectionKey !== "추천_사항",
+                      ),
+                    ].filter(([sectionKey]) => sectionKey !== "전체_요약");
+
+                    const sectionIcons: Record<string, React.ReactNode> = {
+                      전체_요약: <FileText className="h-4 w-4" />,
+                      인상적_해석: <Eye className="h-4 w-4" />,
+                      구조적_해석: <LayoutGrid className="h-4 w-4" />,
+                      표상적_해석: <Layers className="h-4 w-4" />,
+                      정서_영역_소견: <Heart className="h-4 w-4" />,
+                      구성_분석: <LayoutGrid className="h-4 w-4" />,
+                      구성요소_분석: <Layers className="h-4 w-4" />,
+                      부가요소_분석: <Sparkles className="h-4 w-4" />,
+                      하늘요소_분석: <Cloud className="h-4 w-4" />,
+                      하늘_요소_분석: <Cloud className="h-4 w-4" />,
+                      얼굴_분석: <User className="h-4 w-4" />,
+                      신체_분석: <Layers className="h-4 w-4" />,
+                      의류_분석: <LayoutGrid className="h-4 w-4" />,
+                      집_구성요소_분석: <Home className="h-4 w-4" />,
+                      주변요소_분석: <Cloud className="h-4 w-4" />,
+                      자연요소_분석: (
+                        <TreeDeciduous className="h-4 w-4" />
+                      ),
+                      발달_평가: <TrendingUp className="h-4 w-4" />,
+                      종합_해석: <FileText className="h-4 w-4" />,
+                    };
+                    const sectionLabels: Record<string, string> = {
+                      인상적_해석: "인상적 해석",
+                      구조적_해석: "구조적 해석",
+                      표상적_해석: "표상적 해석",
+                      정서_영역_소견: "정서 영역 소견",
+                    };
+                    const sectionColors: Record<string, string> = {
+                      전체_요약: "bg-slate-50 border-slate-200 text-slate-700",
+                      인상적_해석:
+                        "bg-blue-50 border-blue-200 text-blue-700",
+                      구조적_해석:
+                        "bg-indigo-50 border-indigo-200 text-indigo-700",
+                      표상적_해석:
+                        "bg-purple-50 border-purple-200 text-purple-700",
+                      정서_영역_소견:
+                        "bg-rose-50 border-rose-200 text-rose-700",
+                      구성_분석: "bg-blue-50 border-blue-200 text-blue-700",
+                      구성요소_분석:
+                        "bg-purple-50 border-purple-200 text-purple-700",
+                      집_구성요소_분석:
+                        "bg-purple-50 border-purple-200 text-purple-700",
+                      부가요소_분석:
+                        "bg-amber-50 border-amber-200 text-amber-700",
+                      하늘요소_분석: "bg-sky-50 border-sky-200 text-sky-700",
+                      하늘_요소_분석: "bg-sky-50 border-sky-200 text-sky-700",
+                      주변요소_분석:
+                        "bg-emerald-50 border-emerald-200 text-emerald-700",
+                      자연요소_분석:
+                        "bg-lime-50 border-lime-200 text-lime-700",
+                      얼굴_분석:
+                        "bg-indigo-50 border-indigo-200 text-indigo-700",
+                      신체_분석: "bg-teal-50 border-teal-200 text-teal-700",
+                      의류_분석: "bg-rose-50 border-rose-200 text-rose-700",
+                      발달_평가:
+                        "bg-green-50 border-green-200 text-green-700",
+                      종합_해석: "bg-teal-50 border-teal-200 text-teal-700",
+                    };
+
+                    return (
+                      <div
+                        key={key}
+                        data-slot="card"
+                        className="space-y-3 break-inside-avoid"
+                      >
+                        {/* 전체 요약 - 인상적 해석 바로 위에 붙이기 */}
+                        <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent rounded-2xl p-6 border border-primary/20">
+                          <div className="flex items-start gap-4">
+                            <div className="h-12 w-12 rounded-xl bg-primary/20 flex items-center justify-center shrink-0">
+                              <Brain className="h-6 w-6 text-primary" />
+                            </div>
+                            <div>
+                              <h3 className="font-bold text-lg text-foreground mb-2">
+                                전체 요약 ({OBJECT_LABELS[key] || key})
+                              </h3>
+                              <p className="text-[15px] text-muted-foreground leading-relaxed">
+                                {summaryContent}
+                              </p>
+                              {summary?.논문_근거 && (
+                                <div className="mt-3 inline-flex items-center gap-2 text-xs text-primary bg-primary/10 px-3 py-1 rounded-full">
+                                  <FileText className="h-3 w-3" />
+                                  {summary.논문_근거}
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <h3 className="font-bold text-lg text-foreground mb-2">
-                            전체 요약{" "}
-                            {activeInterpretTab === "tree"
-                              ? "(나무)"
-                              : activeInterpretTab === "house"
-                                ? "(집)"
-                                : activeInterpretTab === "man"
-                                  ? "(남자사람)"
-                                  : "(여자사람)"}
-                          </h3>
-                          <p className="text-[15px] text-muted-foreground leading-relaxed">
-                            {summaryContent}
-                          </p>
-                          {summary?.논문_근거 && (
-                            <div className="mt-3 inline-flex items-center gap-2 text-xs text-primary bg-primary/10 px-3 py-1 rounded-full">
-                              <FileText className="h-3 w-3" />
-                              {summary.논문_근거}
+                        {/* 해석 섹션들 - 전체 요약과 간격 축소 */}
+                        <div className="space-y-3">
+                          {value?.interpretation ? (
+                            orderedEntries.map(([sectionKey, sectionValue]) => (
+                              <div
+                                key={sectionKey}
+                                className="rounded-xl border bg-white overflow-hidden break-inside-avoid"
+                              >
+                                <div
+                                  className={`px-4 py-3 border-b flex items-center gap-2 ${sectionColors[sectionKey] || "bg-slate-50"}`}
+                                >
+                                  {sectionIcons[sectionKey] || (
+                                    <FileText className="h-4 w-4" />
+                                  )}
+                                  <span className="font-semibold text-sm">
+                                    {sectionLabels[sectionKey] ??
+                                      formatInterpretationKey(sectionKey)}
+                                  </span>
+                                </div>
+                                <div className="p-4">
+                                  {renderInterpretationSection(
+                                    sectionValue,
+                                    analysisResult.childName,
+                                  )}
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="text-center py-12 text-muted-foreground">
+                              <Brain className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                              <p>해석 결과가 없습니다.</p>
                             </div>
                           )}
                         </div>
                       </div>
-                    </div>
-
-                    {/* 전체 심리 결과는 상단(Summary Card 아래)에 표시됨 */}
-                  </>
-                );
-              })()}
-
-              {/* Interpretation Tabs */}
-              <Card className="border-0 shadow-sm">
-                <CardContent className="p-6">
-                  <Tabs
-                    value={activeInterpretTab}
-                    onValueChange={setActiveInterpretTab}
-                  >
-                    <TabsList className="grid w-full grid-cols-4 bg-slate-100 p-1 rounded-xl">
-                      <TabsTrigger
-                        value="tree"
-                        className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm"
-                      >
-                        나무
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="house"
-                        className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm"
-                      >
-                        집
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="man"
-                        className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm"
-                      >
-                        남자아이
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="woman"
-                        className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm"
-                      >
-                        여자아이
-                      </TabsTrigger>
-                    </TabsList>
-                    {["tree", "house", "man", "woman"].map((key) => {
+                    );
+                  })}
+                </div>
+              ) : (
+                <>
+                  {(() => {
+                    const activeInterpretation =
+                      interpretations[activeInterpretTab]?.interpretation ||
+                      null;
+                    const summary =
+                      activeInterpretation?.["전체_요약"];
+                    const perDrawingSummary =
+                      (typeof summary?.내용 === "string" &&
+                        summary.내용.trim()
+                        ? summary.내용
+                        : typeof summary === "string" && summary.trim()
+                          ? summary
+                          : null) ??
+                      (typeof activeInterpretation?.인상적_해석 ===
+                        "string" &&
+                        activeInterpretation.인상적_해석.trim()
+                        ? activeInterpretation.인상적_해석
+                        : null);
+                    const summaryContent = replaceSummaryForDisplay(
+                      perDrawingSummary ??
+                        "해석 요약이 아직 준비되지 않았습니다.",
+                      analysisResult.childName,
+                    );
+                    return (
+                      <>
+                        <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent rounded-2xl p-6 border border-primary/20">
+                          <div className="flex items-start gap-4">
+                            <div className="h-12 w-12 rounded-xl bg-primary/20 flex items-center justify-center shrink-0">
+                              <Brain className="h-6 w-6 text-primary" />
+                            </div>
+                            <div>
+                              <h3 className="font-bold text-lg text-foreground mb-2">
+                                전체 요약{" "}
+                                {activeInterpretTab === "tree"
+                                  ? "(나무)"
+                                  : activeInterpretTab === "house"
+                                    ? "(집)"
+                                    : activeInterpretTab === "man"
+                                      ? "(남자사람)"
+                                      : "(여자사람)"}
+                              </h3>
+                              <p className="text-[15px] text-muted-foreground leading-relaxed">
+                                {summaryContent}
+                              </p>
+                              {summary?.논문_근거 && (
+                                <div className="mt-3 inline-flex items-center gap-2 text-xs text-primary bg-primary/10 px-3 py-1 rounded-full">
+                                  <FileText className="h-3 w-3" />
+                                  {summary.논문_근거}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <Card className="border-0 shadow-sm">
+                          <CardContent className="p-6">
+                            <Tabs
+                              value={activeInterpretTab}
+                              onValueChange={setActiveInterpretTab}
+                            >
+                              <TabsList className="grid w-full grid-cols-4 bg-slate-100 p-1 rounded-xl">
+                                <TabsTrigger
+                                  value="tree"
+                                  className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                                >
+                                  나무
+                                </TabsTrigger>
+                                <TabsTrigger
+                                  value="house"
+                                  className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                                >
+                                  집
+                                </TabsTrigger>
+                                <TabsTrigger
+                                  value="man"
+                                  className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                                >
+                                  남자아이
+                                </TabsTrigger>
+                                <TabsTrigger
+                                  value="woman"
+                                  className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm"
+                                >
+                                  여자아이
+                                </TabsTrigger>
+                              </TabsList>
+                              {["tree", "house", "man", "woman"].map((key) => {
                       const value = interpretations[key];
                       const interpretation = value?.interpretation || {};
                       const paperSectionOrder = [
@@ -1558,7 +2185,7 @@ export default function ResultPage() {
                         <TabsContent
                           key={key}
                           value={key}
-                          className="mt-6 space-y-6"
+                          className="mt-4 space-y-4"
                         >
                           {value?.interpretation ? (
                             orderedEntries.map(([sectionKey, sectionValue]) => {
@@ -1668,6 +2295,11 @@ export default function ResultPage() {
                   </Tabs>
                 </CardContent>
               </Card>
+                      </>
+                    );
+                  })()}
+                </>
+              )}
 
               {/* Emotional State Grid */}
               <Card className="border-0 shadow-sm">
@@ -1812,7 +2444,21 @@ export default function ResultPage() {
             </TabsContent>
 
             {/* Recommendations Tab - API recommendations 우선, 없으면 기본 추천 */}
-            <TabsContent value="recommendations" className="space-y-6">
+            <TabsContent
+              value="recommendations"
+              forceMount
+              className="space-y-6 data-[state=inactive]:hidden data-[state=inactive]:absolute data-[state=inactive]:pointer-events-none"
+            >
+              {isPdfCaptureView && (
+                <div className="pb-3 mb-4 border-b border-border">
+                  <h2 className="text-xl font-semibold text-foreground">
+                    추천 사항
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    카테고리별 맞춤 추천
+                  </p>
+                </div>
+              )}
               <div className="grid gap-6 md:grid-cols-3">
                 {(apiRecommendations.length
                   ? apiRecommendations
@@ -1821,8 +2467,7 @@ export default function ResultPage() {
                   <Card key={rec.category}>
                     <CardHeader>
                       <CardTitle className="text-lg">
-                        {RECOMMENDATION_CATEGORY_LABELS[rec.category] ??
-                          rec.category}
+                        {getRecommendationCategoryLabel(rec.category)}
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -1845,8 +2490,8 @@ export default function ResultPage() {
                 ))}
               </div>
 
-              {/* CTA */}
-              <Card className="bg-primary/5 border-primary/20">
+              {/* CTA - PDF 저장 시 숨김 */}
+              <Card className="bg-primary/5 border-primary/20 pdf-hide-on-capture">
                 <CardContent className="p-6">
                   <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                     <div>

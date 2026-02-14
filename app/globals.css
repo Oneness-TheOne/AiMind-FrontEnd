@@ -136,3 +136,24 @@
     height: 0;
   }
 }
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* PDF 캡처 시: 모든 탭 패널 표시(발달 비교·심리 해석·추천 사항 포함), 탭 리스트·저장 버튼 숨김 */
+body.pdf-capture [data-slot="tabs-content"] {
+  display: block !important;
+  visibility: visible !important;
+  height: auto !important;
+  position: static !important;
+  pointer-events: auto !important;
+}
+body.pdf-capture [data-slot="tabs-list"] {
+  display: none !important;
+}
+body.pdf-capture .pdf-hide-on-capture {
+  display: none !important;
+}
