@@ -136,35 +136,11 @@ function mapDrawingToHistory(d: DrawingAnalysisItem): AnalysisHistory {
   };
 }
 
-const developmentData = [
-  {
-    key: "emotional",
-    current: 78,
-    previous: 72,
-    label: "정서 발달",
-    color: "bg-teal-500",
-  },
-  {
-    key: "social",
-    current: 82,
-    previous: 78,
-    label: "사회성 발달",
-    color: "bg-blue-500",
-  },
-  {
-    key: "cognitive",
-    current: 75,
-    previous: 70,
-    label: "인지 발달",
-    color: "bg-purple-500",
-  },
-  {
-    key: "creative",
-    current: 85,
-    previous: 80,
-    label: "창의성",
-    color: "bg-amber-500",
-  },
+/** 발달 영역별 분석: 에너지, 위치 안정성, 표현력 (drawing_scores 기반) */
+const DEVELOPMENT_AREA_KEYS = [
+  { key: "energy", label: "에너지", color: "bg-teal-500", scoreKey: "에너지_점수" as const },
+  { key: "location", label: "위치 안정성", color: "bg-blue-500", scoreKey: "위치_안정성_점수" as const },
+  { key: "expression", label: "표현력", color: "bg-amber-500", scoreKey: "표현력_점수" as const },
 ];
 
 const ITEMS_PER_PAGE = 3;
@@ -262,6 +238,49 @@ export default function MyPage() {
     (historyPage - 1) * ITEMS_PER_PAGE,
     historyPage * ITEMS_PER_PAGE,
   );
+
+  /** 평균 점수: 선택된 아이(또는 전체) 분석 목록의 overall_score 평균 */
+  const averageScore = (() => {
+    const list = selectedChild ? filteredAnalysisHistoryList : analysisHistoryList;
+    const scores = list
+      .map((a) => (a.rawDrawing?.comparison as { overall_score?: number })?.overall_score)
+      .filter((s): s is number => typeof s === "number" && !Number.isNaN(s));
+    if (scores.length === 0) return null;
+    return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+  })();
+
+  /** 이용 기간: 가입일 기준 1개월 미만이면 일 수, 1개월 이상이면 개월 수 */
+  const usagePeriod = (() => {
+    const created = profile.created_at ? new Date(profile.created_at) : null;
+    if (!created || Number.isNaN(created.getTime())) return null;
+    const now = new Date();
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const days = Math.max(0, Math.floor((now.getTime() - created.getTime()) / msPerDay));
+    const months = (now.getFullYear() - created.getFullYear()) * 12 + (now.getMonth() - created.getMonth());
+    if (months < 1) return { value: days, unit: "days" as const };
+    return { value: months, unit: "months" as const };
+  })();
+
+  /** 발달 영역별 분석: 최근 분석의 drawing_scores(에너지/위치안정성/표현력) 사용 */
+  const developmentAreaData = (() => {
+    const list = selectedChild ? filteredAnalysisHistoryList : analysisHistoryList;
+    const latest = list[0];
+    const prev = list[1];
+    const agg = (latest?.rawDrawing?.comparison as { drawing_scores?: { aggregated?: Record<string, number> } } | undefined)
+      ?.drawing_scores?.aggregated;
+    const prevAgg = (prev?.rawDrawing?.comparison as { drawing_scores?: { aggregated?: Record<string, number> } } | undefined)
+      ?.drawing_scores?.aggregated;
+    const fallback = 50; // 또래 평균
+    return DEVELOPMENT_AREA_KEYS.map((area) => {
+      const current = agg && typeof agg[area.scoreKey] === "number" ? Math.round(agg[area.scoreKey]) : fallback;
+      const previous = prevAgg && typeof prevAgg[area.scoreKey] === "number" ? Math.round(prevAgg[area.scoreKey]) : fallback;
+      return {
+        ...area,
+        current,
+        previous,
+      };
+    });
+  })();
 
   const handleSelectChild = (childId: number) => {
     setSelectedChildId(childId);
@@ -931,7 +950,14 @@ export default function MyPage() {
                         <TrendingUp className="h-4 w-4 text-green-600" />
                       </div>
                       <p className="text-2xl font-bold text-slate-800">
-                        80<span className="text-sm">점</span>
+                        {averageScore != null ? (
+                          <>
+                            {averageScore}
+                            <span className="text-sm">점</span>
+                          </>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        )}
                       </p>
                       <p className="text-xs text-slate-500 mt-0.5">평균 점수</p>
                     </div>
@@ -940,7 +966,14 @@ export default function MyPage() {
                         <Award className="h-4 w-4 text-amber-600" />
                       </div>
                       <p className="text-2xl font-bold text-slate-800">
-                        3<span className="text-sm">개월</span>
+                        {usagePeriod != null ? (
+                          <>
+                            {usagePeriod.value}
+                            <span className="text-sm">{usagePeriod.unit === "days" ? "일" : "개월"}</span>
+                          </>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        )}
                       </p>
                       <p className="text-xs text-slate-500 mt-0.5">이용 기간</p>
                     </div>
@@ -960,8 +993,8 @@ export default function MyPage() {
                     최근 분석 결과 기반
                   </span>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {developmentData.map((data, index) => (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {developmentAreaData.map((data, index) => (
                     <div
                       key={data.key}
                       className={`bg-slate-50 rounded-2xl p-5 transition-all duration-500 hover:bg-slate-100 ${
